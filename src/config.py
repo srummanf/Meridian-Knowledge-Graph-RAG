@@ -41,16 +41,16 @@ class Settings(BaseSettings):
     neo4j_username: str = "neo4j"
     neo4j_password: str = "meridian-dev"
     postgres_dsn: str = (
-        "postgresql+psycopg://meridian:meridian-dev@localhost:5432/meridian"
+        "postgresql+psycopg://meridian:meridian-dev@localhost:5433/meridian"
     )
 
     # llm providers
     llm_provider: str = "groq"  # primary; the other in PROVIDERS is the fallback
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
-    groq_router_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_router_model: str = "openai/gpt-oss-20b"
     google_api_key: str = ""
-    google_model: str = "gemini-2.0-flash"
+    google_model: str = "gemini-3.6-flash"
 
     # embeddings (local)
     embed_model: str = "BAAI/bge-small-en-v1.5"
@@ -124,7 +124,7 @@ def build_chat_model(provider: str, *, router: bool = False) -> "BaseChatModel":
         model = settings.groq_router_model if router else settings.groq_model
         return ChatGroq(
             model=model,
-            api_key=settings.groq_api_key or "unset",
+            groq_api_key=settings.groq_api_key or "unset",
             temperature=settings.temperature,
             max_tokens=max_tokens,
         )

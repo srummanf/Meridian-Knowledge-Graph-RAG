@@ -8,7 +8,16 @@ import sys
 _CONFIGURED = False
 
 # Third-party loggers that are noisy at INFO.
-_QUIET = ("httpx", "httpcore", "neo4j", "urllib3", "sentence_transformers", "transformers")
+_QUIET = (
+    "httpx",
+    "httpcore",
+    "neo4j",
+    "urllib3",
+    "sentence_transformers",
+    "transformers",
+    "google_genai",
+    "google_genai.models",
+)
 
 
 def configure_logging(level: str = "INFO") -> None:

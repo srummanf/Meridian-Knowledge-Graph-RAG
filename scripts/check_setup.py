@@ -17,6 +17,22 @@ configure_logging(settings.log_level)
 log = get_logger("check_setup")
 
 
+def _message_text(reply: object) -> str:
+    """Flatten a chat reply to plain text.
+
+    Some models (e.g. Gemini 3.x) return ``content`` as a list of parts rather
+    than a string; join the text parts.
+    """
+    content = getattr(reply, "content", reply)
+    if isinstance(content, list):
+        parts = [
+            p if isinstance(p, str) else p.get("text", "")
+            for p in content
+        ]
+        return "".join(parts).strip()
+    return str(content).strip()
+
+
 def check_neo4j() -> bool:
     from neo4j import GraphDatabase
 
@@ -41,7 +57,7 @@ def check_postgres() -> bool:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 assert cur.fetchone()[0] == 1
-                cur.execute("SELECT extname FROM pg_available_extensions WHERE name = 'vector'")
+                cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
                 if cur.fetchone() is None:
                     log.error("postgres: 'vector' extension not available in this image")
                     return False
@@ -67,7 +83,7 @@ def check_provider(provider: str) -> bool:
     try:
         model = build_chat_model(provider, router=True)
         reply = model.invoke("Reply with exactly one word: pong")
-        text = getattr(reply, "content", str(reply)).strip()
+        text = _message_text(reply)
         log.info("%s -> %r", provider, text[:60])
         return bool(text)
     except Exception as exc:  # noqa: BLE001
