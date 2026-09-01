@@ -47,8 +47,9 @@ class Settings(BaseSettings):
     # llm providers
     llm_provider: str = "groq"  # primary; the other in PROVIDERS is the fallback
     groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-120b"
-    groq_router_model: str = "openai/gpt-oss-20b"
+    groq_model: str = "openai/gpt-oss-120b"  # synthesis (quality-critical)
+    groq_router_model: str = "openai/gpt-oss-20b"  # routing (small, fast)
+    groq_extract_model: str = "openai/gpt-oss-120b"  # ingest extraction; set to 20b if 120b quota is spent
     google_api_key: str = ""
     google_model: str = "gemini-3.6-flash"
 
@@ -103,12 +104,16 @@ def configure_llm_cache() -> None:
 # --------------------------------------------------------------------------- #
 # Model factories
 # --------------------------------------------------------------------------- #
-def build_chat_model(provider: str, *, router: bool = False) -> "BaseChatModel":
+def build_chat_model(
+    provider: str, *, router: bool = False, extract: bool = False
+) -> BaseChatModel:
     """Build a single provider's chat model (no fallback).
 
     Args:
         provider: One of :data:`PROVIDERS`.
-        router: Use the smaller/cheaper model and a tighter token budget.
+        router: Use the small router model and a tighter token budget.
+        extract: Use the ingest-extraction model (a separate Groq model so the
+            token-heavy batch has its own daily quota).
 
     Returns:
         A configured LangChain chat model.
@@ -121,7 +126,12 @@ def build_chat_model(provider: str, *, router: bool = False) -> "BaseChatModel":
     if provider == "groq":
         from langchain_groq import ChatGroq
 
-        model = settings.groq_router_model if router else settings.groq_model
+        if router:
+            model = settings.groq_router_model
+        elif extract:
+            model = settings.groq_extract_model
+        else:
+            model = settings.groq_model
         return ChatGroq(
             model=model,
             groq_api_key=settings.groq_api_key or "unset",
@@ -150,32 +160,56 @@ def _ordered_providers() -> list[str]:
 
 
 def chat_model(
-    structured: type[BaseModel] | None = None, *, router: bool = False
-) -> "Runnable":
+    structured: type[BaseModel] | None = None,
+    *,
+    router: bool = False,
+    extract: bool = False,
+) -> Runnable:
     """Primary chat model with automatic fallback to the other provider.
 
     Args:
         structured: If given, bind this Pydantic model as the response schema
             (``with_structured_output``); ``invoke`` then returns an instance.
         router: Use the router model / token budget.
+        extract: Use the ingest-extraction model.
 
     Returns:
         A runnable. ``.invoke(str | messages)`` returns an ``AIMessage`` (or a
         ``structured`` instance). Falls back provider-to-provider on error.
     """
     configure_llm_cache()
-    models: list[Runnable] = [
-        build_chat_model(p, router=router) for p in _ordered_providers()
-    ]
-    if structured is not None:
-        models = [m.with_structured_output(structured) for m in models]
+    models: list[Runnable] = []
+    for provider in _ordered_providers():
+        model = build_chat_model(provider, router=router, extract=extract)
+        if structured is not None:
+            model = _with_structured_output(model, provider, structured)
+        models.append(model)
     primary, *rest = models
     return primary.with_fallbacks(rest) if rest else primary
 
 
-def router_model(structured: type[BaseModel] | None = None) -> "Runnable":
+def _with_structured_output(
+    model: BaseChatModel, provider: str, schema: type[BaseModel]
+) -> Runnable:
+    """Bind ``schema`` as the response format, per-provider.
+
+    Groq's ``gpt-oss`` models reject the default ``function_calling`` method
+    ("called tool 'json' which was not in request.tools"); their native
+    ``json_schema`` structured-output mode works. Google is fine on the default.
+    """
+    if provider == "groq":
+        return model.with_structured_output(schema, method="json_schema")
+    return model.with_structured_output(schema)
+
+
+def router_model(structured: type[BaseModel] | None = None) -> Runnable:
     """Chat model tuned for the question router (small model, short output)."""
     return chat_model(structured, router=True)
+
+
+def extract_model(structured: type[BaseModel] | None = None) -> Runnable:
+    """Chat model for ingest extraction (own Groq model → own daily quota)."""
+    return chat_model(structured, extract=True)
 
 
 @functools.lru_cache

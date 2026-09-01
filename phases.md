@@ -41,23 +41,38 @@ bad (unknown enum, out-of-range confidence).
 
 ### 1.2 Chunking
 `src/ingest/chunk.py` — `MarkdownHeaderTextSplitter`; one chunk per document,
-split by `##` only if a doc exceeds ~350 tokens. Assign
-`chunk_id = "<relpath>"` / `"<relpath>#<slug>"`. **Gate:** 37 docs →
-**40–55 chunks**, unique ids, non-empty content.
+split by `##` only if a doc exceeds **~280 tokens** (no doc in the final corpus
+reaches the original ~350 estimate; largest ≈ 289). When a doc splits, `##`
+sections are *packed* greedily into ~250-token sub-chunks, not one-per-heading.
+Assign `chunk_id = "<relpath>"` / `"<relpath>#<slug-of-first-section>"`.
+**Gate:** 37 docs → **40–55 chunks** (currently 42), unique ids, non-empty
+content.
 
-### 1.3 Extraction
-`src/ingest/extract.py` — prompt built from `ONTOLOGY.md` + `SCHEMA.md` examples;
-`chat_model.with_structured_output(ExtractionResult)`; validation (enum,
-evidence-substring, confidence) with ≤3 retry. Relies on `SQLiteCache`.
-**Gate:** clean run on 3 sample docs (`auth-service`, `ledger-service`,
-`payments-platform`); a corrupted response is rejected + retried; second run is
-a cache hit.
+### 1.3 Extraction ✅
+`src/ingest/extract.py` — prompt built from `ONTOLOGY.md` §1–§3 + the `SCHEMA.md`
+§5 example (§4–§5 folded into the task instructions to save tokens);
+`chat_model.with_structured_output(ExtractionResult)` — **Groq uses
+`method="json_schema"`** (`gpt-oss` rejects the default `function_calling`).
+Validation (enum, evidence-substring, confidence floor, property-subset,
+endpoint-in-chunk) with ≤3 retry feeding the errors back; unparseable responses
+also retried; exhausted chunks recorded in `failed`, not raised. Relies on
+`SQLiteCache`. **Gate:** clean run on `auth-service`, `ledger-service`,
+`payments-platform` (`tests/test_extract.py -m llm`); corrupted response rejected
++ retried; second run is a cache hit (SQLite row count unchanged).
+Note: Groq free-tier TPM limits make a full 42-chunk run take ~5–20 min with
+back-offs — acceptable for a one-time ingest.
 
-### 1.4 Graph load + resolution
+### 1.4 Graph load + resolution — code complete, ingest gate pending
 `src/ingest/resolve.py` (normalise → alias table → dedupe → deterministic id),
-`src/graph/queries.py` (12 MERGE templates), `src/graph/client.py` (`Neo4jGraph`
-+ index setup), `src/ingest/load_graph.py`. `scripts/ingest_corpus.py` runs
-chunk→extract→resolve→load. **Gate:**
+`src/graph/queries.py` (11 entity + 12 relationship MERGE templates, built from
+the enums), `src/graph/client.py` (`Neo4jGraph` + constraint/index setup),
+`src/ingest/load_graph.py` (node `properties` → JSON string; `HANDLES` → `:Concern`
+node). `scripts/ingest_corpus.py` runs chunk→extract→resolve→load (`--wipe` for a
+clean rebuild; pauses cleanly, exit 2, when both LLM providers are throttled).
+53 unit/integration tests pass. **End-to-end ingest incomplete:** the 42-chunk
+extraction exceeded the Groq free-tier 200K-tokens/day cap on 2026-09-01 (~32
+chunks cached). Resume with `python scripts/ingest_corpus.py` after the quota
+resets. **Gate:**
 - Neo4j: **45–65 distinct entities**, **140–200 relationships**.
 - Every `ONTOLOGY.md` §3 alias case → one node.
 - Re-running `ingest_corpus.py` changes no counts.

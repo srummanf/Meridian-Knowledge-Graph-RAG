@@ -5,6 +5,9 @@
 The spec is in `prd.md`, `architecture.md`, `rules.md`, `phases.md`; the corpus
 contract is in `data/ONTOLOGY.md` and `data/SCHEMA.md`.
 
+`PHASE_BUILD.md` is a file-by-file build log (what each module does + why). Keep
+it and the Progress table in `README.md` updated at the end of every sub-phase.
+
 ---
 
 ## 1. Split of responsibility

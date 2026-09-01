@@ -58,3 +58,7 @@ ignore = ["E501"]  # long lines in prompt/template strings are fine
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "llm: test makes real LLM API calls (needs GROQ_API_KEY / GOOGLE_API_KEY); skip with -m 'not llm'",
+    "neo4j: test needs a running Neo4j (docker-compose up); skip with -m 'not neo4j'",
+]

@@ -53,14 +53,16 @@ def check_postgres() -> bool:
     import psycopg
 
     try:
-        with psycopg.connect(settings.psycopg_dsn, connect_timeout=5) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                assert cur.fetchone()[0] == 1
-                cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
-                if cur.fetchone() is None:
-                    log.error("postgres: 'vector' extension not available in this image")
-                    return False
+        with (
+            psycopg.connect(settings.psycopg_dsn, connect_timeout=5) as conn,
+            conn.cursor() as cur,
+        ):
+            cur.execute("SELECT 1")
+            assert cur.fetchone()[0] == 1
+            cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
+            if cur.fetchone() is None:
+                log.error("postgres: 'vector' extension not available in this image")
+                return False
         return True
     except Exception as exc:  # noqa: BLE001
         log.error("postgres: %s", exc)

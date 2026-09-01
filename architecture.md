@@ -49,7 +49,7 @@ validator** (see §6).
 | Vector store | pgvector / Postgres 16 (Docker) via `langchain-postgres` `PGVector` | flat/exact search — no HNSW (~45 vectors) |
 | LLM (extract, route, synth) | `langchain-groq` **default**, `langchain-google-genai` **fallback** | one factory in `config.py` picks the chat model; both free tier, $0. No local fallback — if both are down, `/query` and ingestion return an error. |
 | Embeddings | `langchain-huggingface` `HuggingFaceEmbeddings` running `BAAI/bge-small-en-v1.5` locally (384-dim) | 130 MB, runs in ms on CPU |
-| Extraction | `chat_model.with_structured_output(ExtractionResult)` | Pydantic v2 schema, provider-native JSON mode |
+| Extraction | `chat_model.with_structured_output(ExtractionResult)` | Pydantic v2 schema. Groq: `method="json_schema"` (`gpt-oss` rejects `function_calling`); Google: default |
 | Chunking | `langchain-text-splitters` `MarkdownHeaderTextSplitter` | one chunk per doc; splits on `##` when a doc is large |
 | LLM cache | `langchain_core.globals.set_llm_cache(SQLiteCache("cache/llm.db"))` | re-runs are free and instant |
 | Config | `pydantic-settings` + `.env` | |
@@ -61,14 +61,14 @@ validator** (see §6).
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=meridian-dev
-POSTGRES_DSN=postgresql+psycopg://meridian:meridian-dev@localhost:5432/meridian
+POSTGRES_DSN=postgresql+psycopg://meridian:meridian-dev@localhost:5433/meridian  # 5433: a native PG may hold 5432
 
 LLM_PROVIDER=groq                      # groq | google  (primary; the other is the fallback)
 GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
-GROQ_ROUTER_MODEL=llama-3.1-8b-instant
+GROQ_MODEL=openai/gpt-oss-120b         # large: synthesis (JSON schema mode)
+GROQ_ROUTER_MODEL=openai/gpt-oss-20b   # small/fast: routing + entity mentions
 GOOGLE_API_KEY=
-GOOGLE_MODEL=gemini-2.0-flash
+GOOGLE_MODEL=gemini-3.6-flash
 
 EMBED_MODEL=BAAI/bge-small-en-v1.5     # local, 384-dim
 ```
@@ -127,6 +127,14 @@ EntityType = Literal["Product","Service","API","Library","Language","Database",
 RelationType = Literal["PART_OF","DEPENDS_ON","USES","EXPOSES","CONSUMES",
                        "COMMUNICATES_VIA","SECURED_BY","DEPLOYED_ON","OWNED_BY",
                        "HANDLES","AFFECTS","ALTERNATIVE_TO"]
+DataConcern = Literal["PII","PCI cardholder data","financial records",
+                      "authentication credentials","merchant business data"]  # HANDLES targets
+
+CONFIDENCE_FLOOR = 0.80          # ONTOLOGY §5 — drop below this at ingest, don't fail
+RELATION_PROPERTY_KEYS: dict[str, frozenset[str]]  # ONTOLOGY §2, used by extraction validation
+
+def slugify(name: str) -> str: ...                 # ONTOLOGY §4
+def make_entity_id(entity_type: str, canonical_name: str) -> str: ...
 
 class Entity(BaseModel):
     id: str                       # "<type_lower>:<slug(canonical_name)>" — deterministic
@@ -134,22 +142,22 @@ class Entity(BaseModel):
     canonical_name: str
     aliases: list[str] = []
     properties: dict[str, Any] = {}
-    confidence: float
-    source_chunk_id: str
+    confidence: float             # [0, 1]
+    source_chunk_id: str = ""     # stamped by the ingest pipeline, not the LLM (SCHEMA §2)
 
 class Relationship(BaseModel):
     source_id: str; source_name: str
     type: RelationType
     target_id: str; target_name: str
     properties: dict[str, Any] = {}
-    confidence: float
-    evidence: str                 # exact substring of the chunk
-    source_chunk_id: str
+    confidence: float             # [0, 1]
+    evidence: str                 # exact substring of the chunk (LLM must supply)
+    source_chunk_id: str = ""     # stamped by the ingest pipeline (SCHEMA §3)
 
 # models/extraction.py — the schema passed to with_structured_output()
 class ExtractionResult(BaseModel):
-    entities: list[Entity]
-    relationships: list[Relationship]
+    entities: list[Entity] = []
+    relationships: list[Relationship] = []
 
 # models/routing.py
 class RoutingDecision(BaseModel):
@@ -159,6 +167,8 @@ class RoutingDecision(BaseModel):
     entities_detected: list[str] = []
 
 # models/answer.py
+class Passage(BaseModel):          # a chunk returned by vector retrieval
+    chunk_id: str; document: str; content: str; score: float
 class Citation(BaseModel):
     claim: str; chunk_id: str; source_type: Literal["VECTOR","GRAPH"]
 class GroundedAnswer(BaseModel):
@@ -217,9 +227,10 @@ class QueryState(TypedDict):
 
 ### Framework does it
 
-- **`ingest/chunk.py`** — `MarkdownHeaderTextSplitter` on `#`/`##`; one chunk per
-  document unless it exceeds ~350 tokens, then per `##` section.
-  `chunk_id = "<relpath>"` or `"<relpath>#<slug>"`.
+- **`ingest/chunk.py`** — `MarkdownHeaderTextSplitter` on `##`; one chunk per
+  document unless it exceeds ~280 tokens, then split on `##` and pack sections
+  greedily into ~250-token sub-chunks. `chunk_id = "<relpath>"` or
+  `"<relpath>#<slug-of-first-section>"`. Token counts estimated as `chars / 4`.
 - **`ingest/extract.py`** — `chat_model.with_structured_output(ExtractionResult)`
   with a prompt built from `ONTOLOGY.md`. On a Pydantic/enum failure, retry ≤ 3
   with the error appended; then log to `failed_chunks`. Drop rows with
