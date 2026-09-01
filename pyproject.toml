@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meridian-kg-rag"
+version = "0.1.0"
+description = "Hybrid knowledge-graph + vector RAG over the Meridian corpus"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+
+dependencies = [
+    # orchestration
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langgraph>=0.2.0",
+    "langchain-text-splitters>=0.3.0",
+    # providers / integrations
+    "langchain-groq>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-huggingface>=0.1.0",
+    "langchain-postgres>=0.0.12",
+    "langchain-neo4j>=0.1.0",
+    # embeddings
+    "sentence-transformers>=3.0.0",
+    # datastores
+    "neo4j>=5.20.0",
+    "psycopg[binary]>=3.1.0",
+    "pgvector>=0.3.0",
+    # api / config
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # long lines in prompt/template strings are fine
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

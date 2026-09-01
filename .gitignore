@@ -1,0 +1,20 @@
+.env
+cache/
+!cache/.gitkeep
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+.venv/
+venv/
+env/
+
+# hf model cache lives under here on some setups
+.cache/
+
+.DS_Store
+Thumbs.db
