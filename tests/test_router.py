@@ -1,14 +1,26 @@
-"""Phase 3.1: router — confidence-floor logic (unit) and accuracy (gate)."""
+"""Phase 3.1: router — confidence-floor logic (unit) and accuracy (gate).
+
+The labelled set is `tests/fixtures/routing_eval.json` (>= 20 questions, disjoint
+from the few-shot block). Gate: accuracy >= the fixture's `accuracy_gate`.
+"""
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from scripts.eval_router import load_eval_set, run_eval
+from src.config import REPO_ROOT
 from src.models.routing import HYBRID_CONFIDENCE_FLOOR, Route, RoutingDecision
 from src.pipeline.router import _SYSTEM_PROMPT, _apply_confidence_floor, route_question
 
 VALID_ROUTES = set(Route.__args__)  # type: ignore[attr-defined]
+FIXTURE = REPO_ROOT / "tests" / "fixtures" / "routing_eval.json"
+
+
+def _load_eval_set() -> tuple[list[dict], float]:
+    data = json.loads(FIXTURE.read_text("utf-8"))
+    return data["questions"], data.get("accuracy_gate", 0.90)
 
 
 class StubRouter:
@@ -40,13 +52,11 @@ def test_low_confidence_is_downgraded_to_hybrid(route: str) -> None:
 
 
 def test_confident_route_is_left_alone() -> None:
-    out = _apply_confidence_floor(_decision("GRAPH", 0.95))
-    assert out.route == "GRAPH"
+    assert _apply_confidence_floor(_decision("GRAPH", 0.95)).route == "GRAPH"
 
 
 def test_hybrid_below_floor_stays_hybrid() -> None:
-    out = _apply_confidence_floor(_decision("HYBRID", 0.4))
-    assert out.route == "HYBRID"
+    assert _apply_confidence_floor(_decision("HYBRID", 0.4)).route == "HYBRID"
 
 
 def test_route_question_applies_floor_and_passes_through_model() -> None:
@@ -65,13 +75,12 @@ def test_route_question_keeps_a_confident_decision() -> None:
 # fixture hygiene
 # --------------------------------------------------------------------------- #
 def test_eval_fixture_is_well_formed_and_disjoint_from_few_shot() -> None:
-    questions, gate = load_eval_set()
+    questions, gate = _load_eval_set()
     assert len(questions) >= 20
     assert 0.0 < gate <= 1.0
     for item in questions:
         assert item["gold_route"] in VALID_ROUTES
-        # a fixture question must not also be a few-shot example (no leakage)
-        assert item["question"] not in _SYSTEM_PROMPT
+        assert item["question"] not in _SYSTEM_PROMPT  # no few-shot leakage
 
 
 # --------------------------------------------------------------------------- #
@@ -79,7 +88,11 @@ def test_eval_fixture_is_well_formed_and_disjoint_from_few_shot() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.llm
 def test_router_accuracy_clears_the_gate() -> None:
-    questions, gate = load_eval_set()
-    result = run_eval(questions)
-    misses = [(r.gold, r.predicted, r.question) for r in result.rows if not r.correct]
-    assert result.accuracy >= gate, f"accuracy {result.accuracy:.2f} < {gate}; {misses}"
+    questions, gate = _load_eval_set()
+    results = [
+        (q["gold_route"], route_question(q["question"]).route, q["question"])
+        for q in questions
+    ]
+    misses = [(g, p, q) for g, p, q in results if g != p]
+    accuracy = 1 - len(misses) / len(results)
+    assert accuracy >= gate, f"accuracy {accuracy:.2f} < {gate}; {misses}"

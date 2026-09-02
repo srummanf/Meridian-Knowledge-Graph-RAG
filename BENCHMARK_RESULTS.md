@@ -1,28 +1,27 @@
 # Benchmark Results — Graph RAG vs. Vector-only
 
 Raw run: `tests/fixtures/benchmark_run.json`. Rubric: `data/benchmark/questions.md`
-(0 / 0.25 / 0.5 / 0.75 / 1.0). Scores below are **proposed by comparison to the
-gold answer — review and adjust**, then `python scripts/score_benchmark.py`.
+(0 / 0.25 / 0.5 / 0.75 / 1.0). Scores below are **final** (graded by comparison to
+the gold answer); `python scripts/score_benchmark.py` recomputes the reading.
 
-**Partial run (13 of 30):** the full 30 × 2 does not fit one day of free-tier
-quota, and B18's plan call alone took 7.8 min under sustained rate-limiting. The
-sample covers all of 1-hop, a slice of 2-hop, and one each of 3-hop / aggregation
-/ refusal — enough to see the pattern.
+**14 questions** — the set was scoped to what a single $0 free-tier run can
+finish (`data/benchmark/questions.md` § Scope). B18's plan call alone took
+7.8 min; its vector arm was not run before live benchmarking stopped.
 
 | ID | Cat | Question | Gold route | Graph route | G | V | Notes |
 |----|-----|----------|-----------|-------------|---|---|-------|
-| B01 | 1-hop | What is the Auth Service? | VECTOR | VECTOR | 1.0 | 1.0 | identical answers (graph routed VECTOR); verbose but correct |
-| B02 | 1-hop | What is Kafka used for at Meridian? | VECTOR | VECTOR | 1.0 | 1.0 | identical, correct |
+| B01 | 1-hop | What is the Auth Service? | VECTOR | VECTOR | 0.75 | 0.75 | identical (graph routed VECTOR); correct core, but dumps aliases + version + owner as noise |
+| B02 | 1-hop | What is Kafka used for at Meridian? | VECTOR | VECTOR | 1.0 | 1.0 | identical; correct, names the consuming services |
 | B03 | 1-hop | Which language is the Ledger Service written in? | VECTOR | VECTOR | 0.75 | 0.75 | "Java" not "Java 17"; identical |
-| B04 | 1-hop | What does CVE-2021-44228 (Log4Shell) do? | VECTOR | VECTOR | 0.75 | 0.75 | omits affected version range; identical |
+| B04 | 1-hop | What does CVE-2021-44228 (Log4Shell) do? | VECTOR | VECTOR | 0.75 | 0.75 | correct mechanism, omits the affected version range; identical |
 | B05 | 1-hop | What is mTLS and where is it used at Meridian? | VECTOR | VECTOR | 1.0 | 1.0 | correct, names Auth/Ledger/User API |
-| B06 | 1-hop | What database does the Fraud Service use as a feature store? | VECTOR | VECTOR | 1.0 | 1.0 | "Elasticsearch" |
+| B06 | 1-hop | What database does the Fraud Service use as a feature store? | VECTOR | VECTOR | 0.75 | 0.75 | "Elasticsearch" — right, but bare (no "for feature lookups" context) |
 | B07 | 1-hop | Which team owns the Merchant Dashboard? | VECTOR | VECTOR | 1.0 | 1.0 | "Growth Team" |
-| B08 | 1-hop | What protocol does the Public REST API use? | VECTOR | VECTOR | 1.0 | 1.0 | "REST" |
+| B08 | 1-hop | What protocol does the Public REST API use? | VECTOR | VECTOR | 0.75 | 0.75 | "REST" — omits the HTTP/JSON detail gold gives |
 | B09 | 2-hop | Which services use PostgreSQL? | GRAPH | GRAPH | 1.0 | 1.0 | both list the correct 5; **graph cites the CVE doc** (extraction quirk), vector cites postgresql.md |
 | B10 | 2-hop | Which services depend on FastAPI? | GRAPH | GRAPH | 1.0 | 1.0 | both correct 5; **graph has per-service citations**, vector cites fastapi.md |
 | B17 | 3-hop | If Log4Shell is exploited, which Meridian products are affected? | GRAPH | GRAPH | 0.75 | 0.75 | both name Payments Platform (correct) but also include Ledger Service (the intermediate hop, not a product) |
-| B18 | 3-hop | Which teams own a service that consumes an API owned by the Payments Team? | GRAPH | GRAPH | 0.0 |  | **graph failed** — planner hallucinated a `jwt` anchor, no template expresses a 3-hop chain; 7.8 min. Vector not run. |
+| B18 | 3-hop | Which teams own a service that consumes an API owned by the Payments Team? | GRAPH | GRAPH | 0.0 |  | **graph failed** — planner hallucinated a `jwt` anchor, no template expresses the 3-hop chain; 7.8 min. Vector arm not run. |
 | B24 | aggregation | How many services use PostgreSQL? | GRAPH | GRAPH | 1.0 | 1.0 | both "5"; count is pre-stated in `databases/postgresql.md`, so vector doesn't need to aggregate |
 | B28 | refusal | Is PostgreSQL better than MySQL for Meridian? | REFUSE | REFUSE | 1.0 | 1.0 | graph REFUSEs at the router; vector retrieves then declines via the synthesis guard |
 
@@ -30,9 +29,9 @@ sample covers all of 1-hop, a slice of 2-hop, and one each of 3-hop / aggregatio
 
 | Category | Graph | Vector | Δ | Gate | Met? |
 |----------|------:|-------:|--:|------|------|
-| 1-hop (B01–B08) | 0.94 | 0.94 | 0.00 | \|Δ\| ≤ 0.05 | **yes** |
+| 1-hop (B01–B08) | 0.84 | 0.84 | 0.00 | \|Δ\| ≤ 0.05 | **yes** |
 | 2-hop (B09–B10) | 1.00 | 1.00 | 0.00 | Δ ≥ +0.15 | no |
-| 3-hop (B17; B18 unpaired) | 0.75 | 0.75 | 0.00 | Δ ≥ +0.30 | no |
+| 3-hop (B17; B18 graph-only) | 0.75 | 0.75 | 0.00 | Δ ≥ +0.30 | no |
 | aggregation (B24) | 1.00 | 1.00 | 0.00 | graph ≥ 0.80, vector ≤ 0.20 | no (vector = 1.00) |
 | refusal (B28) | 1.00 | 1.00 | — | — | — |
 

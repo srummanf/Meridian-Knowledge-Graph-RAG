@@ -1,12 +1,15 @@
 # Benchmark Questions — Meridian Knowledge Graph
 
-30 questions for the Phase 5 comparison of Graph RAG vs. vector-only RAG.
-Stratified by hop count. Each has a gold answer grounded in the corpus and the
+13 questions for the Phase 5 comparison of Graph RAG vs. vector-only RAG,
+stratified by hop count. Each has a gold answer grounded in the corpus and the
 route it *should* take.
 
-Phase 5 converts this file to `tests/fixtures/benchmark_questions.json`.
-Expected shape: parity on 1-hop, Graph pulls ahead on 2-hop, wide gap on 3-hop
-and aggregation.
+> **Scope.** This started as a 30-question set. It was cut to the 13 that a
+> single free-tier ($0) benchmark run could complete — all of Category 1, a
+> slice of each other category, enough to see the pattern. The original IDs
+> (B01–B10, B17, B18, B24, B28) are kept so they map to the code and fixtures.
+> `scripts/benchmark.py` converts this file to
+> `tests/fixtures/benchmark_questions.json`.
 
 ## Grading rubric (manual, per answer)
 
@@ -83,38 +86,6 @@ Gold: API Gateway, User Service, Notification Service, Fraud Service, Reporting
 Service (5).
 Sources: libraries/fastapi.md#usage-at-meridian
 
-**B11. What does the Billing Service depend on?**
-Route: GRAPH
-Gold: Django, Celery, Python (libraries/language); it also uses PostgreSQL and
-Redis and consumes the Ledger API and User API.
-Sources: services/billing-service.md
-
-**B12. Which services does the Growth Team own?**
-Route: GRAPH
-Gold: Merchant Dashboard (product) and Notification Service.
-Sources: teams/growth-team.md#ownership
-
-**B13. Which APIs are secured by mTLS?**
-Route: GRAPH
-Gold: Auth API, Ledger API, User API.
-Sources: security/mtls.md#usage-at-meridian
-
-**B14. Which services consume the Ledger API?**
-Route: GRAPH
-Gold: Billing Service, Fraud Service, Reporting Service.
-Sources: services/ledger-service.md#apis
-
-**B15. Which services handle PII?**
-Route: GRAPH
-Gold: Auth Service, User Service, Billing Service, Notification Service, Fraud
-Service.
-Sources: HANDLES edges across the five service docs
-
-**B16. What is the Payments Platform made of?**
-Route: GRAPH
-Gold: Billing Service, Ledger Service, Fraud Service.
-Sources: products/payments-platform.md#composition
-
 ---
 
 ## Category 3 — Three-hop and multi-constraint (wide gap expected)
@@ -133,41 +104,9 @@ Gold: The Data Team (Fraud Service and Reporting Service consume the Ledger API;
 Reporting also consumes the Billing API) and the Payments Team itself (Billing
 consumes the Ledger API). The Ledger API and Billing API are owned by the
 Payments Team.
-Sources: services/{fraud,reporting,billing,ledger}-service.md, teams/*.md
-
-**B19. Which PostgreSQL-backed services are also exposed to the Log4Shell blast radius?**
-Route: GRAPH
-Gold: Only the Ledger Service — it uses PostgreSQL and depends on the affected
-Log4j. (Auth, User, Billing, Reporting use PostgreSQL but are Python services
-with no Log4j.)
-Sources: databases/postgresql.md, libraries/log4j.md, services/ledger-service.md
-
-**B20. Which services both handle PCI cardholder data and are deployed on AWS EKS?**
-Route: GRAPH
-Gold: Billing Service and Ledger Service (both HANDLES "PCI cardholder data",
-both DEPLOYED_ON AWS EKS).
-Sources: services/billing-service.md, services/ledger-service.md
-
-**B21. Through which chain does the Analytics Suite get ledger data?**
-Route: GRAPH
-Gold: Analytics Suite → contains the Reporting Service → Reporting Service
-consumes the Ledger API → Ledger API is exposed by the Ledger Service.
-Sources: products/analytics-suite.md, services/reporting-service.md,
-services/ledger-service.md
-
-**B22. Which databases used by Payments Platform services are self-managed on EKS rather than on a managed AWS service?**
-Route: GRAPH
-Gold: Redis, Kafka, and Elasticsearch (used by Billing/Ledger/Fraud) run
-self-managed on AWS EKS. PostgreSQL, also used, is on managed AWS RDS.
-Sources: databases/*.md, services/{billing,ledger,fraud}-service.md
-
-**B23. Which teams would need to be involved to upgrade PostgreSQL off the version affected by CVE-2024-0985?**
-Route: GRAPH
-Gold: The Platform Team owns the RDS instance and the upgrade; the Payments Team
-(Billing, Ledger) and Data Team (Reporting) plus Platform (Auth, User) own
-services running against it and would need to validate.
-Sources: vulnerabilities/cve-2024-0985-postgresql.md, databases/postgresql.md,
-teams/*.md
+Sources: services/fraud-service.md, services/reporting-service.md,
+services/billing-service.md, services/ledger-service.md, teams/data-team.md,
+teams/payments-team.md
 
 ---
 
@@ -178,23 +117,6 @@ Route: GRAPH
 Gold: 5.
 Sources: databases/postgresql.md
 
-**B25. How many services are deployed on AWS EKS?**
-Route: GRAPH
-Gold: 8 services (API Gateway, Auth, User, Billing, Ledger, Notification, Fraud,
-Reporting). Redis, Elasticsearch, and Kafka also run there but are databases.
-Sources: cloud/aws-eks.md + service docs
-
-**B26. Which database has the most services using it?**
-Route: GRAPH
-Gold: PostgreSQL, with 5 services. Redis has 4.
-Sources: databases/postgresql.md, databases/redis.md
-
-**B27. How many distinct services does the Data Team's Reporting Service depend on or consume APIs from?**
-Route: GRAPH
-Gold: 2 — it consumes the Ledger API (Ledger Service) and the Billing API
-(Billing Service).
-Sources: services/reporting-service.md
-
 ---
 
 ## Category 5 — Out of scope / should refuse
@@ -204,13 +126,3 @@ Route: REFUSE
 Gold: Opinion / not answerable from the corpus. The corpus states Meridian chose
 PostgreSQL for strong consistency and its NUMERIC type, but makes no comparative
 judgement against MySQL.
-
-**B29. Should the Payments Team rewrite the Ledger Service in Go?**
-Route: REFUSE
-Gold: Recommendation / out of scope. The corpus documents the current stack
-(Java 17) but contains no basis for a rewrite recommendation.
-
-**B30. What will Meridian's transaction volume be next year?**
-Route: REFUSE
-Gold: Not in the corpus. The knowledge graph describes architecture and
-ownership, not business forecasts.

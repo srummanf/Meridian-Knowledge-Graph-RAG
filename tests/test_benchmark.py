@@ -12,10 +12,15 @@ _MD = (REPO_ROOT / "data" / "benchmark" / "questions.md").read_text("utf-8")
 # --------------------------------------------------------------------------- #
 # parse_benchmark
 # --------------------------------------------------------------------------- #
-def test_parses_all_thirty_questions() -> None:
+EXPECTED_IDS = [
+    "B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08",
+    "B09", "B10", "B17", "B18", "B24", "B28",
+]
+
+
+def test_parses_the_scoped_question_set() -> None:
     questions = parse_benchmark(_MD)
-    assert len(questions) == 30
-    assert [q.id for q in questions] == [f"B{i:02d}" for i in range(1, 31)]
+    assert [q.id for q in questions] == EXPECTED_IDS
 
 
 def test_categories_map_to_labels() -> None:
@@ -23,6 +28,7 @@ def test_categories_map_to_labels() -> None:
     assert by_id["B01"].category == "1-hop"
     assert by_id["B09"].category == "2-hop"
     assert by_id["B17"].category == "3-hop"
+    assert by_id["B18"].category == "3-hop"
     assert by_id["B24"].category == "aggregation"
     assert by_id["B28"].category == "refusal"
 
@@ -37,9 +43,9 @@ def test_routes_and_sources_extracted() -> None:
 
 
 def test_gold_answer_is_flattened_to_one_line() -> None:
-    b30 = {q.id: q for q in parse_benchmark(_MD)}["B30"]
-    assert "\n" not in b30.gold_answer
-    assert b30.gold_answer.startswith("Not in the corpus")
+    b28 = {q.id: q for q in parse_benchmark(_MD)}["B28"]
+    assert "\n" not in b28.gold_answer
+    assert b28.gold_answer.startswith("Opinion")
 
 
 # --------------------------------------------------------------------------- #

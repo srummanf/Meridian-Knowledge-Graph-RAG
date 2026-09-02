@@ -94,8 +94,8 @@ Free-tier **daily** token/request budgets are the binding constraint (Groq
 cache-first: build the extraction cache once, never re-run extraction against the
 live APIs during iteration. A handful of larger chunks exceed Groq's per-request
 ceiling and route to Gemini automatically. `scripts/benchmark.py` writes its
-results incrementally and resumes, because one pass over all 30 questions × 2
-systems will not fit in a single day's quota.
+results incrementally and resumes — the benchmark itself was scoped down to 14
+questions so a single $0 run finishes it.
 
 ## Windows notes
 

@@ -77,9 +77,9 @@ and go through Gemini. `extract.py` distinguishes a `413` from real throttling
 and switches those chunks to Google-only. Three chunks
 (`user-service.md#overview`/`#security`, `data-team.md`) were parked in
 `DEFERRED_CHUNKS` while both daily quotas were spent; their cached extractions
-were later repaired in place (`scripts/repair_cache_rows.py` — one had a
-relationship missing `confidence`/`evidence`) and folded back in. `DEFERRED_CHUNKS`
-is now empty and the whole corpus rebuilds from cache, $0.
+were later recovered (a one-off dropped one malformed relationship — missing
+`confidence`/`evidence` — from the third's cached response) and folded back in.
+`DEFERRED_CHUNKS` is now empty and the whole corpus rebuilds from cache, $0.
 
 **Gate met (42/42):**
 - Neo4j: **43 entities, 222 relationships**. Entities sit just under the 45–65
@@ -112,12 +112,12 @@ shared key across Neo4j + pgvector; re-run changes nothing.
 
 ### 2.2 Recall sanity check ✅
 `tests/fixtures/vector_eval.json` — 12 `(question → gold chunk_id)` pairs (8 from
-the benchmark's VECTOR set). `scripts/eval_vector.py` builds a scratch collection
-and measures recall@1/3/5; `tests/test_vector_recall.py` is the gate.
-**Gate met:** recall@1 = **1.00** (n=12), well over the 0.9 recall@5 bar. The
-"why no ANN index" paragraph lives in `scripts/eval_vector.py`'s docstring:
-~42 vectors, exact scan is sub-ms and recall-1.0 by construction; HNSW/IVFFlat
-only pay off 3–5 orders of magnitude larger and would add approximation error.
+the benchmark's VECTOR set). `tests/test_retrieve_vector.py::test_recall_at_5_clears_the_gate`
+runs them through `retrieve_vector` and measures recall@5.
+**Gate met:** recall@1 = **1.00** (n=12), well over the 0.9 recall@5 bar. Why no
+ANN index (docstring in `test_retrieve_vector.py`): ~42 vectors, exact scan is
+sub-ms and recall-1.0 by construction; HNSW/IVFFlat only pay off 3–5 orders of
+magnitude larger and would add approximation error.
 
 ---
 
@@ -126,12 +126,11 @@ only pay off 3–5 orders of magnitude larger and would add approximation error.
 ### 3.1 Router ✅ (built)
 `src/pipeline/router.py` — `router_model.with_structured_output(RoutingDecision)`,
 12-example few-shot (10 from `data/benchmark/questions.md`). `conf < 0.70 →
-HYBRID`. Logs every decision. `scripts/eval_router.py` writes `ROUTING_METRICS.md`.
-**Gate met:** **95.2%** (20/21) on `tests/fixtures/routing_eval.json` (21
-labelled questions, disjoint from the few-shot). Confusion matrix in
-`ROUTING_METRICS.md`; the single miss is a GRAPH/VECTOR borderline
-("what does the Billing Service depend on?"). `tests/test_router.py` (8 unit + 1
-`@pytest.mark.llm`).
+HYBRID`. Logs every decision. **Gate met:** **95.2%** (20/21) on
+`tests/fixtures/routing_eval.json` (21 labelled questions, disjoint from the
+few-shot). Confusion matrix in the committed `ROUTING_METRICS.md` snapshot; the
+single miss is a GRAPH/VECTOR borderline ("what does the Billing Service depend
+on?"). `tests/test_router.py` (unit + `@pytest.mark.llm` gate).
 
 ### 3.2 Graph retriever ✅
 `src/pipeline/retrieve_graph.py` — one structured-output call fills a
@@ -141,15 +140,13 @@ Templates (`src/graph/queries.py`): `RESOLVE_ENTITY(_FUZZY)`, `NEIGHBORS`,
 `COUNT_NEIGHBORS`, `TWO_CONSTRAINT`, `PATH_BETWEEN` (`shortestPath ≤5`),
 `BLAST_RADIUS` (variable-length). The rel type is a `$rel` parameter, not
 interpolated. **Gate met:** B09/B14/B16/B17/B24 exact node sets; Cypher 12–56 ms
-(< 200). `tests/test_retrieve_graph.py` (11), `scripts/eval_graph_retrieval.py`,
-`tests/fixtures/graph_eval.json`.
+(< 200). `tests/test_retrieve_graph.py` + `tests/fixtures/graph_eval.json`.
 
 ### 3.3 Vector retriever ✅
 `src/pipeline/retrieve_vector.py` — one `PGVector.similarity_search_with_score`
 (exact cosine, no HNSW), top-k `Passage`s, `score` = raw cosine distance. No LLM
 call. **Gate met:** B01–B08 all rank 1 in top-3.
-`scripts/eval_vector_retrieval.py`, `tests/fixtures/vector_retrieval_eval.json`,
-`tests/test_retrieve_vector.py` (7).
+`tests/fixtures/vector_retrieval_eval.json`, `tests/test_retrieve_vector.py`.
 
 ### 3.4 Merge + graph wiring ✅
 `src/pipeline/merge.py` — `merge()` dedupes passages (best score per `chunk_id`,
@@ -173,7 +170,7 @@ call over the `GRAPH FACTS` / `RETRIEVED PASSAGES` labelled context; a
 `Citation{claim, chunk_id, source_type}` per claim, chunk id copied from a
 `[bracket]`. Empty context → fixed no-answer, no call. **Gate met:** 5/5 sample
 answers coherent + every citation in the retrieved set.
-`tests/test_synthesize.py` (4), `scripts/eval_synthesis.py`.
+`tests/test_synthesize.py`.
 
 ### 4.2 Validate citations ✅
 `src/pipeline/validate.py` — `validate_answer()`: all cited ids in
@@ -182,7 +179,7 @@ answers coherent + every citation in the retrieved set.
 `graph.py::compile_answer_pipeline` wires retrieval subgraph → `synthesize` →
 `validate` (REFUSE skips to END); `answer_question(q)` is the singleton.
 **Gate met:** 100% validity on the sample; injected bad citation removed.
-`tests/test_validate.py` (8), `scripts/eval_validation.py`.
+`tests/test_validate.py`.
 
 ### 4.3 API + end to end ✅
 `src/api/{main,schemas,dependencies}.py` — `POST /query` (200 `GroundedAnswer` /
@@ -190,7 +187,7 @@ answers coherent + every citation in the retrieved set.
 `GET /health`. Invokes `answer_question`. **Gate met:** one integration test per
 route (VECTOR/GRAPH/HYBRID/REFUSE). Latency table in `API_METRICS.md` (measured
 warm — cold free-tier calls add 5–120 s of rate-limit back-off, not
-representative). `tests/test_api.py` (9).
+representative; `API_METRICS.md` is a committed snapshot). `tests/test_api.py`.
 
 ---
 
@@ -206,25 +203,21 @@ runs each through both systems, and writes `tests/fixtures/benchmark_run.json`
 + a grading skeleton to `BENCHMARK_RESULTS.md` (answer, route, latency, est.
 tokens, citations, notes per system). `tests/test_benchmark.py` (parser + scorer).
 
-### 5.2 Grade + analyse 🚧 — gate NOT met on the 13-question sample
-Grades (proposed) in `BENCHMARK_RESULTS.md`; `scripts/score_benchmark.py` means
-per category + gate check. **Gate targets:** 1-hop ±5% · 2-hop ≥ +15% · 3-hop
-≥ +30% · aggregation graph ≥ 80% & vector ≈ 0%.
-**Result:** 1-hop parity ✅; 2-hop / 3-hop / aggregation all **Δ = 0.00** — the
-graph did not beat vector-only. Causes: (1) the corpus pre-aggregates
-relationships (hub docs list their consumers + state counts), so vector answers
-nominal multi-hop from one doc; (2) B18's true 3-hop chain fits none of the six
-`GraphQueryPlan` templates → planner failed. Graph's real edge on the sample:
+### 5.2 Grade + analyse ✅ — gate NOT met; that is the finding
+Question set scoped to **14** (`questions.md` § Scope). Grades in
+`BENCHMARK_RESULTS.md`; `scripts/score_benchmark.py` means + gate check.
+**Result:** 1-hop parity (0.84 / 0.84) ✅; 2-hop / 3-hop / aggregation all
+**Δ = 0.00** — the graph did not beat vector-only. Causes: (1) the corpus
+pre-aggregates relationships (hub docs list their consumers + state counts), so
+vector answers nominal multi-hop from one doc; (2) B18's true 3-hop chain fits
+none of the six `GraphQueryPlan` templates → planner failed. Graph's real edge:
 citation granularity + refusal routing. Full analysis in `FINDINGS.md`.
-Deciding what to do (accept as finding / widen corpus / add a `chain` template)
-is a spec call — see `FINDINGS.md` "productionise".
 
-### 5.3 Writeup 🚧
-- `README.md`: benchmark table added at the top ✅.
-- `FINDINGS.md`: drafted ✅ — corpus pre-aggregation, template ceiling, where the
-  graph wins/loses, latency & cost honesty, *why not `GraphCypherQAChain`*,
-  productionisation.
-- `SETUP.md`: local dev ✅.
+### 5.3 Writeup ✅
+- `README.md`: benchmark table at the top.
+- `FINDINGS.md`: corpus pre-aggregation, template ceiling, where the graph
+  wins/loses, latency & cost honesty, *why not `GraphCypherQAChain`*.
+- `SETUP.md`: local dev.
 
 **Files:** `src/baselines/vector_only.py`, `scripts/benchmark.py`,
 `BENCHMARK_RESULTS.md`, `README.md`, `FINDINGS.md`, `SETUP.md`
@@ -242,8 +235,12 @@ is a spec call — see `FINDINGS.md` "productionise".
 | 4 | 3 d | `/query` end to end, 100% valid citations |
 | 5 | 4–5 d | benchmark table, findings, README |
 
-Resume line (fill X/Y/Z from Phase 5):
+Resume line:
 
 > Built a hybrid knowledge-graph + vector RAG system (LangGraph, Neo4j, pgvector,
-> Groq) over a 37-document technical corpus; raised 3-hop question accuracy from
-> X% to Y% vs. a vector-only baseline at Z ms p95, with 100% citation validity.
+> Groq) over a 37-document corpus: LLM router, a security-reviewed Cypher-template
+> retriever (no model-authored queries), and a citation validator that holds
+> 100% cited-source validity. Benchmarked it head-to-head against a vector-only
+> baseline and reported the honest result — parity on this corpus, because the
+> source docs pre-aggregate their relationships, plus a template-coverage ceiling
+> on true multi-hop questions.

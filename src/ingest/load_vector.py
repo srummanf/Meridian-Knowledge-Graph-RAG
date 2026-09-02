@@ -40,8 +40,8 @@ def vector_store(
 ) -> PGVector:
     """The project's PGVector handle (cosine distance, 384-dim, exact scan).
 
-    ``collection`` defaults to the corpus collection; the recall eval passes its
-    own so it never disturbs the real index.
+    ``collection`` defaults to the corpus collection; it is a parameter so a
+    caller can point at a throwaway collection instead of the real index.
     """
     return PGVector(
         embeddings=embedding or embeddings(),

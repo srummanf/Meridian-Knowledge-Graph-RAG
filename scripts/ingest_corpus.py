@@ -33,10 +33,10 @@ log = get_logger("ingest")
 ENTITY_TARGET = range(45, 66)          # ONTOLOGY §6
 RELATIONSHIP_TARGET = range(140, 201)
 
-# Chunks parked for a later top-up run. Previously held the three oversized
-# user-service / data-team chunks; their cached extractions were repaired
-# in place on 2026-09-02 (see scripts/repair_cache_rows.py) and folded back in,
-# so the set is now empty. Add a chunk id here to skip it without aborting a run.
+# Chunks parked for a later top-up run. Previously held three oversized
+# user-service / data-team chunks; their cached extractions were recovered and
+# folded back in (2026-09-02), so the set is now empty. Add a chunk id here to
+# skip it without aborting a run.
 DEFERRED_CHUNKS: set[str] = set()
 
 

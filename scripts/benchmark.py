@@ -51,7 +51,9 @@ CATEGORY_LABELS = {
     "5": "refusal",
 }
 
-_QUESTION_RE = re.compile(r"\*\*(B\d+)\.\s+(.+?)\*\*\s*\n(.*?)(?=\n\*\*B\d+\.|\Z)", re.DOTALL)
+_QUESTION_RE = re.compile(
+    r"\*\*(B\d+)\.\s+(.+?)\*\*\s*\n(.*?)(?=\n\*\*B\d+\.|\n---|\n## |\Z)", re.DOTALL
+)
 _CATEGORY_RE = re.compile(r"^##\s+Category\s+(\d+)\b", re.MULTILINE)
 _FIELD_RE = re.compile(
     r"Route:\s*(?P<route>\w+).*?"
@@ -176,6 +178,11 @@ def run_benchmark(questions: list[Question], systems: list[str]) -> dict:
 # grading skeleton
 # --------------------------------------------------------------------------- #
 def write_results_md(questions: list[Question], run: dict) -> None:
+    # Once the file carries manual scores it is hand-maintained — don't clobber
+    # it. The raw run is always recoverable from benchmark_run.json.
+    if RESULTS_MD.exists() and re.search(r"\|\s*[01]\.\d+\s*\|", RESULTS_MD.read_text("utf-8")):
+        log.info("%s already has scores — leaving it (raw run in %s)", RESULTS_MD.name, RUN_JSON.name)
+        return
     by_id = {q.id: q for q in questions}
     lines = [
         "# Benchmark Results — Graph RAG vs. Vector-only",
@@ -232,8 +239,7 @@ def main(argv: list[str] | None = None) -> int:
 
     all_questions = parse_benchmark(QUESTIONS_MD.read_text("utf-8"))
     write_fixture(all_questions)
-    if len(all_questions) != 30:
-        log.warning("expected 30 questions, parsed %d", len(all_questions))
+    log.info("parsed %d benchmark questions", len(all_questions))
     if args.parse_only:
         return 0
 

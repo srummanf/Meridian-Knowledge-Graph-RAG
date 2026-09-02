@@ -17,7 +17,7 @@ Planning documents for the Meridian Knowledge Graph RAG project. Read in order.
 | [`data/README.md`](./data/README.md) | Corpus overview, folder map, graph shape, multi-hop chains |
 | [`data/ONTOLOGY.md`](./data/ONTOLOGY.md) | **Single source of truth** — entity/relationship types, precedence, alias table, ID scheme, targets |
 | [`data/SCHEMA.md`](./data/SCHEMA.md) | Extraction output JSON shape + validation rules |
-| [`data/benchmark/questions.md`](./data/benchmark/questions.md) | 30 stratified benchmark questions with gold answers + grading rubric |
+| [`data/benchmark/questions.md`](./data/benchmark/questions.md) | benchmark questions with gold answers + grading rubric (scoped to 14 for the free-tier run) |
 
 ## Snapshot
 

@@ -1,2 +1,2 @@
-"""Runnable scripts. Also importable (`from scripts.eval_vector import ...`) so
-tests can reuse eval logic without shelling out."""
+"""Runnable scripts. Also importable (`from scripts.benchmark import ...`) so
+tests can reuse the benchmark parser/scorer without shelling out."""

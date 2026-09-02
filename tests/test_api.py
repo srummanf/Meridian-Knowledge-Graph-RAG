@@ -123,13 +123,41 @@ def test_health_degraded_still_200(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 # GATE — real pipeline, one question per route
 # --------------------------------------------------------------------------- #
+_GATE_CASES = [
+    ("What is the Auth Service?", "VECTOR", 200),
+    ("Which services use PostgreSQL?", "GRAPH", 200),
+    ("What is the Ledger API and which services consume it?", "HYBRID", 200),
+    ("Should the Payments Team rewrite the Ledger Service in Go?", "REFUSE", 422),
+]
+
+
+def _gate_check(real_client: TestClient, question: str, route: str, status: int) -> str | None:
+    r = real_client.post("/query", json={"question": question})
+    body = r.json()
+    if r.status_code != status:
+        return f"{question}: status {r.status_code} != {status}"
+    if r.status_code == 422:
+        return None if body.get("error") == "out_of_scope" else f"{question}: {body!r}"
+    if not body.get("citations"):
+        return f"{question}: no citations"
+    vector_ids = set(body.get("vector_passages", []))
+    for c in body["citations"]:
+        if c["source_type"] == "VECTOR" and c["chunk_id"] not in vector_ids:
+            return f"{question}: VECTOR citation {c['chunk_id']} not retrieved"
+    if route != "HYBRID" and body.get("routing_used") != route:
+        return f"{question}: routing_used {body.get('routing_used')} != {route}"
+    return None
+
+
 @pytest.mark.llm
 @pytest.mark.neo4j
 @pytest.mark.pgvector
 def test_api_gate() -> None:
-    from scripts.eval_api import CASES, _check
-
     with TestClient(app) as real_client:
-        results = [_check(real_client, q, route, status) for q, route, status in CASES]
-    failed = [(r.question, r.detail) for r in results if not r.ok]
+        failed = [
+            problem
+            for q, route, status in _GATE_CASES
+            for problem in [_gate_check(real_client, q, route, status)]
+            if problem
+        ]
     assert not failed, f"route failures: {failed}"

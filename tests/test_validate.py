@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
+from src.config import REPO_ROOT
 from src.models.answer import Citation, GraphFact, GroundedAnswer, MergedContext, Passage
-from src.pipeline.graph import compile_answer_pipeline
+from src.pipeline.graph import answer_question, compile_answer_pipeline
+from src.pipeline.synthesize import synthesize
 from src.pipeline.validate import validate_answer
+
+_SYNTHESIS_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "synthesis_eval.json"
 
 
 def _context() -> MergedContext:
@@ -132,8 +138,33 @@ def test_pipeline_fallback_note_reaches_the_answer() -> None:
 @pytest.mark.neo4j
 @pytest.mark.pgvector
 def test_validation_gate() -> None:
-    from scripts.eval_validation import _injection_case, _validity_cases
+    questions = json.loads(_SYNTHESIS_FIXTURE.read_text("utf-8"))["questions"]
+    failed: list[tuple[str, str]] = []
 
-    cases = [*_validity_cases(), _injection_case()]
-    failed = [(c.question, c.detail) for c in cases if not c.ok]
+    # (1) 100% citation validity through the full pipeline
+    for item in questions:
+        state = answer_question(item["question"])
+        answer = state.get("answer")
+        if answer is None:
+            failed.append((item["question"], "no answer (refused?)"))
+            continue
+        retrieved = set(state["context"].chunk_ids)
+        bad = [c.chunk_id for c in answer.citations if c.chunk_id not in retrieved]
+        if bad:
+            failed.append((item["question"], f"invalid: {bad}"))
+
+    # (2) an injected bad citation is caught and removed
+    q = "Which services use PostgreSQL?"
+    state = answer_question(q)
+    context = state["context"]
+    base = synthesize(q, context, routing_used="GRAPH")
+    poisoned = base.model_copy(update={"citations": [
+        *base.citations,
+        Citation(claim="fabricated", chunk_id="does/not/exist.md", source_type="GRAPH"),
+    ]})
+    fixed = validate_answer(poisoned, context, question=q)
+    leaked = [c.chunk_id for c in fixed.citations if c.chunk_id not in set(context.chunk_ids)]
+    if leaked or not fixed.citations:
+        failed.append(("injected bad citation", f"leaked {leaked}"))
+
     assert not failed, f"invalid citations: {failed}"

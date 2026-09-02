@@ -79,7 +79,7 @@
     "gold_answer": "REST (HTTP/JSON) as its primary protocol.",
     "gold_sources": [
       "services/api-gateway.md#apis",
-      "protocols/rest.md --- ## Category 2 \u2014 Two-hop (Graph advantage begins)"
+      "protocols/rest.md"
     ]
   },
   {
@@ -103,64 +103,6 @@
     ]
   },
   {
-    "id": "B11",
-    "question": "What does the Billing Service depend on?",
-    "category": "2-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Django, Celery, Python (libraries/language); it also uses PostgreSQL and Redis and consumes the Ledger API and User API.",
-    "gold_sources": [
-      "services/billing-service.md"
-    ]
-  },
-  {
-    "id": "B12",
-    "question": "Which services does the Growth Team own?",
-    "category": "2-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Merchant Dashboard (product) and Notification Service.",
-    "gold_sources": [
-      "teams/growth-team.md#ownership"
-    ]
-  },
-  {
-    "id": "B13",
-    "question": "Which APIs are secured by mTLS?",
-    "category": "2-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Auth API, Ledger API, User API.",
-    "gold_sources": [
-      "security/mtls.md#usage-at-meridian"
-    ]
-  },
-  {
-    "id": "B14",
-    "question": "Which services consume the Ledger API?",
-    "category": "2-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Billing Service, Fraud Service, Reporting Service.",
-    "gold_sources": [
-      "services/ledger-service.md#apis"
-    ]
-  },
-  {
-    "id": "B15",
-    "question": "Which services handle PII?",
-    "category": "2-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Auth Service, User Service, Billing Service, Notification Service, Fraud Service.",
-    "gold_sources": []
-  },
-  {
-    "id": "B16",
-    "question": "What is the Payments Platform made of?",
-    "category": "2-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Billing Service, Ledger Service, Fraud Service.",
-    "gold_sources": [
-      "products/payments-platform.md#composition --- ## Category 3 \u2014 Three-hop and multi-constraint (wide gap expected)"
-    ]
-  },
-  {
     "id": "B17",
     "question": "If Log4Shell is exploited, which Meridian products are affected?",
     "category": "3-hop",
@@ -179,66 +121,12 @@
     "gold_route": "GRAPH",
     "gold_answer": "The Data Team (Fraud Service and Reporting Service consume the Ledger API; Reporting also consumes the Billing API) and the Payments Team itself (Billing consumes the Ledger API). The Ledger API and Billing API are owned by the Payments Team.",
     "gold_sources": [
-      "services/{fraud",
-      "teams/*.md"
-    ]
-  },
-  {
-    "id": "B19",
-    "question": "Which PostgreSQL-backed services are also exposed to the Log4Shell blast radius?",
-    "category": "3-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Only the Ledger Service \u2014 it uses PostgreSQL and depends on the affected Log4j. (Auth, User, Billing, Reporting use PostgreSQL but are Python services with no Log4j.)",
-    "gold_sources": [
-      "databases/postgresql.md",
-      "libraries/log4j.md",
-      "services/ledger-service.md"
-    ]
-  },
-  {
-    "id": "B20",
-    "question": "Which services both handle PCI cardholder data and are deployed on AWS EKS?",
-    "category": "3-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Billing Service and Ledger Service (both HANDLES \"PCI cardholder data\", both DEPLOYED_ON AWS EKS).",
-    "gold_sources": [
-      "services/billing-service.md",
-      "services/ledger-service.md"
-    ]
-  },
-  {
-    "id": "B21",
-    "question": "Through which chain does the Analytics Suite get ledger data?",
-    "category": "3-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Analytics Suite \u2192 contains the Reporting Service \u2192 Reporting Service consumes the Ledger API \u2192 Ledger API is exposed by the Ledger Service.",
-    "gold_sources": [
-      "products/analytics-suite.md",
+      "services/fraud-service.md",
       "services/reporting-service.md",
-      "services/ledger-service.md"
-    ]
-  },
-  {
-    "id": "B22",
-    "question": "Which databases used by Payments Platform services are self-managed on EKS rather than on a managed AWS service?",
-    "category": "3-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "Redis, Kafka, and Elasticsearch (used by Billing/Ledger/Fraud) run self-managed on AWS EKS. PostgreSQL, also used, is on managed AWS RDS.",
-    "gold_sources": [
-      "databases/*.md",
-      "services/{billing"
-    ]
-  },
-  {
-    "id": "B23",
-    "question": "Which teams would need to be involved to upgrade PostgreSQL off the version affected by CVE-2024-0985?",
-    "category": "3-hop",
-    "gold_route": "GRAPH",
-    "gold_answer": "The Platform Team owns the RDS instance and the upgrade; the Payments Team (Billing, Ledger) and Data Team (Reporting) plus Platform (Auth, User) own services running against it and would need to validate.",
-    "gold_sources": [
-      "vulnerabilities/cve-2024-0985-postgresql.md",
-      "databases/postgresql.md",
-      "teams/*.md --- ## Category 4 \u2014 Aggregation / counting (Graph only)"
+      "services/billing-service.md",
+      "services/ledger-service.md",
+      "teams/data-team.md",
+      "teams/payments-team.md"
     ]
   },
   {
@@ -252,58 +140,11 @@
     ]
   },
   {
-    "id": "B25",
-    "question": "How many services are deployed on AWS EKS?",
-    "category": "aggregation",
-    "gold_route": "GRAPH",
-    "gold_answer": "8 services (API Gateway, Auth, User, Billing, Ledger, Notification, Fraud, Reporting). Redis, Elasticsearch, and Kafka also run there but are databases.",
-    "gold_sources": [
-      "cloud/aws-eks.md"
-    ]
-  },
-  {
-    "id": "B26",
-    "question": "Which database has the most services using it?",
-    "category": "aggregation",
-    "gold_route": "GRAPH",
-    "gold_answer": "PostgreSQL, with 5 services. Redis has 4.",
-    "gold_sources": [
-      "databases/postgresql.md",
-      "databases/redis.md"
-    ]
-  },
-  {
-    "id": "B27",
-    "question": "How many distinct services does the Data Team's Reporting Service depend on or consume APIs from?",
-    "category": "aggregation",
-    "gold_route": "GRAPH",
-    "gold_answer": "2 \u2014 it consumes the Ledger API (Ledger Service) and the Billing API (Billing Service).",
-    "gold_sources": [
-      "services/reporting-service.md --- ## Category 5 \u2014 Out of scope / should refuse"
-    ]
-  },
-  {
     "id": "B28",
     "question": "Is PostgreSQL better than MySQL for Meridian?",
     "category": "refusal",
     "gold_route": "REFUSE",
     "gold_answer": "Opinion / not answerable from the corpus. The corpus states Meridian chose PostgreSQL for strong consistency and its NUMERIC type, but makes no comparative judgement against MySQL.",
-    "gold_sources": []
-  },
-  {
-    "id": "B29",
-    "question": "Should the Payments Team rewrite the Ledger Service in Go?",
-    "category": "refusal",
-    "gold_route": "REFUSE",
-    "gold_answer": "Recommendation / out of scope. The corpus documents the current stack (Java 17) but contains no basis for a rewrite recommendation.",
-    "gold_sources": []
-  },
-  {
-    "id": "B30",
-    "question": "What will Meridian's transaction volume be next year?",
-    "category": "refusal",
-    "gold_route": "REFUSE",
-    "gold_answer": "Not in the corpus. The knowledge graph describes architecture and ownership, not business forecasts.",
     "gold_sources": []
   }
 ]

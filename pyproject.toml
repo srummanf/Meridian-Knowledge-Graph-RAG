@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Hybrid knowledge-graph + vector RAG over the Meridian corpus"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Shaikh Rumman Fardeen", email = "rummanfardeen4567@gmail.com" }]
 
 dependencies = [
     # orchestration

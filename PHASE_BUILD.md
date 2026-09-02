@@ -88,9 +88,7 @@ Goal: resolve the per-chunk extractions into one clean graph and MERGE it into N
 | `src/graph/client.py` | `graph_client()` — the shared `Neo4jGraph` (one driver/process). `ensure_schema()`, `wipe()`. |
 | `src/ingest/load_graph.py` | `load_graph(entities, relationships)` — MERGE each entity (its `properties` map is JSON-serialised because Neo4j properties must be primitive; `version` hoisted out), then each relationship via its template. Returns live DB counts. All MERGE → re-running changes nothing. |
 | `scripts/ingest_corpus.py` | `chunk_corpus() → extract_corpus(skip=DEFERRED_CHUNKS) → resolve() → load_graph() → load_vector()`. `--wipe` for a clean rebuild. Prints the summary + type breakdowns and checks the gate ranges. `DEFERRED_CHUNKS` is now empty; still pauses cleanly (exit 2) if a chunk finds both providers rate-limited. |
-| `scripts/backfill_extract.py` | One-off: extract the oversized chunks through **Gemini only** and write the result into `cache/llm.db` as the *first-attempt* Google cache row, so a normal Groq-primary ingest cache-hits the Google fallback leg. Never deletes a row. |
-| `scripts/repair_cache_rows.py` | One-off: drop malformed rows (missing required fields) from a cached extraction *response*, in place, keeping the cache key. Fixed `user-service.md#overview` — its cached response had one relationship missing `confidence`/`evidence`, which made the structured-output parser reject the whole response and `extract_chunk` retry live every ingest. Backs the original row up to `cache/llm.db.repair-backup.*.jsonl`; idempotent. |
-| `tests/test_resolve.py` (39) · `tests/test_queries.py` (8) · `tests/test_load_graph.py` (6, 3 `@pytest.mark.neo4j`) | |
+| `tests/test_resolve.py` (39) · `tests/test_load_graph.py` (6, 3 `@pytest.mark.neo4j`). Cypher-template checks (one per type, MERGE-not-CREATE, no unfilled placeholders, named params only) live in `tests/test_retrieve_graph.py`. |
 
 **Concept:** resolution is where "the gateway", "api-gw", "edge gateway" all
 become the one node `service:api-gateway`. Determinism + MERGE-on-deterministic-id
@@ -111,10 +109,11 @@ oversized chunks were extracted via Gemini and cached.
 
 A day of iterative debugging then burned **both** free daily quotas (Groq 200K
 tokens; Gemini 20 requests), leaving 3 chunks parked in `DEFERRED_CHUNKS`. Their
-cached extractions were later recovered — 2 already cache-hit cleanly, and
-`repair_cache_rows.py` fixed the malformed relationship in the third — so the
-full corpus is now in the graph: **all 42 chunks, 43 entities / 222
-relationships**, idempotent, `$0`, ~2 min to rebuild from cache. Entities land
+cached extractions were later recovered — 2 already cache-hit cleanly, and a
+one-off repair dropped one malformed relationship (missing `confidence`/`evidence`)
+from the third's cached response so the parser would accept it — so the full
+corpus is now in the graph: **all 42 chunks, 43 entities / 222 relationships**,
+idempotent, `$0`, ~2 min to rebuild from cache. Entities land
 just under the 45–65 target (the corpus really has 43 distinct nodes); the raw
 edge count is above 140–200 because edges are keyed on `source_chunk_id` for
 provenance (distinct `(src,type,tgt)` ≈ 130).
@@ -152,10 +151,8 @@ pipeline depends on it.
 | File | What it does |
 |------|--------------|
 | `tests/fixtures/vector_eval.json` | 12 `(question → gold_chunk_id)` pairs — definitional questions whose answer lives in exactly one chunk; 8 are lifted from `data/benchmark/questions.md` (the VECTOR-route B01–B08), 4 are extra. Carries the gate (`recall_at_5_gate: 0.9`) and `k`. |
-| `scripts/eval_vector.py` | Builds the corpus into a **scratch** collection `meridian_eval` (chunks only — no LLM, no graph), runs each question through `similarity_search`, prints recall@1/3/5 and per-question rank, drops the scratch collection. `PASS` if recall@5 ≥ gate. Also holds the "why no ANN index" write-up (module docstring). |
-| `scripts/__init__.py` | makes `scripts/` importable so tests reuse `eval_vector` logic. |
-| `src/ingest/load_vector.py` | `vector_store(collection=…)` gained a param so the eval never touches the real `meridian_chunks`. |
-| `tests/test_vector_recall.py` | 1 unit test (every fixture gold id is a real chunk — guards against drift) + 1 `@pytest.mark.pgvector` gate test (recall@5 ≥ 0.9). |
+| `tests/test_retrieve_vector.py` (Phase 2.2 half) | `test_recall_fixture_gold_ids_are_real_chunks` (drift guard, offline) + `test_recall_at_5_clears_the_gate` (`@pytest.mark.pgvector` — recall@5 over the fixture against the live `meridian_chunks`, ≥ 0.9). The "why no ANN index" rationale is in the module docstring + `src/ingest/load_vector.py`. |
+| `src/ingest/load_vector.py` | `vector_store(collection=…)` gained a param (used by nothing now that the recall check runs against the real collection — kept for symmetry). |
 
 **Result:** **recall@1 = 1.00** over all 12 questions. Expected — with ~42
 distinct-topic vectors and an *exact* scan, the nearest chunk is the right chunk.
@@ -173,7 +170,7 @@ before any retrieval runs.
 | `src/pipeline/__init__.py` | package marker for the query pipeline. |
 | `src/pipeline/router.py` | `route_question(question)` — one `router_model.with_structured_output(RoutingDecision)` call (`gpt-oss-20b`, small/fast) with a few-shot system prompt (12 examples: 4 VECTOR / 4 GRAPH / 4 REFUSE, 10 lifted from the benchmark), then `_apply_confidence_floor`: a non-HYBRID route with `confidence < 0.70` is downgraded to HYBRID (rules.md §5.1 — "unsure? run both"). Logs `question → route conf` for every call (Phase 5 reads it). No DB, no Cypher. |
 | `tests/fixtures/routing_eval.json` | 21 hand-labelled questions, **disjoint from the few-shot block** (a test enforces this). VECTOR/GRAPH gold tracks the benchmark; REFUSE items are fresh. `accuracy_gate: 0.90`. |
-| `scripts/eval_router.py` | Runs the eval set through `route_question`, prints per-question hits + accuracy, writes `ROUTING_METRICS.md` (accuracy + gold×predicted confusion matrix + misclassification list). Reusable `load_eval_set` / `run_eval` imported by the test. |
+| `tests/test_router.py` | Confidence-floor unit tests + fixture-hygiene guard + the `@pytest.mark.llm` accuracy gate (≥ the fixture's `accuracy_gate`). `ROUTING_METRICS.md` is a committed snapshot of one run's accuracy + confusion matrix. |
 | `tests/test_router.py` | 8 unit tests (confidence-floor cases with a stub model, fixture-hygiene / no-leakage guard) + 1 `@pytest.mark.llm` gate test (accuracy ≥ 0.90). |
 | `ROUTING_METRICS.md` | generated. |
 
@@ -196,7 +193,7 @@ let the model touch Cypher.
 | `src/graph/queries.py` (read templates) | 7 generic read templates — the retriever's entire Cypher surface. `RESOLVE_ENTITY` / `RESOLVE_ENTITY_FUZZY` (canonical name + alias, then substring), `NEIGHBORS` / `COUNT_NEIGHBORS` (1-hop with `$rel` / `$direction` / `$neighbor_type` filters, all nullable), `TWO_CONSTRAINT` (node satisfying two edges), `PATH_BETWEEN` (`shortestPath ≤5`), `BLAST_RADIUS` (CVE → library → `DEPENDS_ON*1..3` service → product). The rel type is always a `WHERE type(r) = $rel` **parameter**, never interpolated — one template per shape, not per type. |
 | `src/models/answer.py` (`GraphFact`) | One relationship rendered as a sentence + its `source_chunk_id` + `evidence`. The graph-side counterpart to `Passage`; synthesis cites it identically. |
 | `src/pipeline/retrieve_graph.py` | `retrieve_graph(question)` — **exactly one LLM call** fills a `GraphQueryPlan` (`intent`, `anchors`, `relationship`, `direction`, …) via `router_model.with_structured_output`; the model is told it does **not** write Cypher. Then deterministic: resolve each anchor mention to a node id (concern vocab → canonical/alias → fuzzy), pick the template for `plan.intent`, run it via `Neo4jGraph.query` with named params, turn each row into a sentence with a per-relationship-type verb (`_REL_VERB` / `_REL_VERB_PLURAL`). Unresolved anchor or empty result → empty `GraphRetrieval` (not an error) so the pipeline falls back to vector. Times the Cypher only (the plan call is excluded from the latency gate). |
-| `scripts/eval_graph_retrieval.py` + `tests/fixtures/graph_eval.json` | Gate runner over B09/B14/B16/B17/B24. `gold_nodes` (recall 1.0), `exact` (result must equal gold), `extra_ok` (nodes the built corpus legitimately adds), `expected_count` (the count sentence leads correctly). |
+| `tests/fixtures/graph_eval.json` | Gate set B09/B14/B16/B17/B24. `gold_nodes` (recall 1.0), `exact` (result must equal gold), `extra_ok` (nodes the built corpus legitimately adds), `expected_count` (the count sentence leads correctly). Run by `tests/test_retrieve_graph.py::test_graph_retrieval_gate`. |
 | `tests/test_retrieve_graph.py` | 8 unit (pure formatting + stub-plan/fake-client wiring) + 2 `@pytest.mark.neo4j` (real resolve, ≤200 ms neighbours) + 1 `@pytest.mark.llm+neo4j` **gate**. |
 
 **Result:** gate **PASS** — 5/5 exact, all queries 12–56 ms (budget 200). One
@@ -216,7 +213,7 @@ Goal: top-k corpus passages for a VECTOR-routed question.
 | File | What it does |
 |------|--------------|
 | `src/pipeline/retrieve_vector.py` | `retrieve_vector(question, k=5)` — one `PGVector.similarity_search_with_score` against `meridian_chunks` (exact cosine, no HNSW). Each hit → `Passage(chunk_id, document, content, score)`; `score` keeps PGVector's raw cosine *distance* (0 = identical, rows already sorted ascending). No LLM call — embeddings are local. Empty result → `[]` (pipeline routes to REFUSE). `store` is injectable for tests. |
-| `scripts/eval_vector_retrieval.py` + `tests/fixtures/vector_retrieval_eval.json` | Gate over B01–B08. `gold_chunks` lists every chunk that legitimately answers (a split doc contributes several; some questions are answerable from either of two docs); pass = a gold chunk in the top `rank_within` (3). |
+| `tests/fixtures/vector_retrieval_eval.json` | Gate over B01–B08. `gold_chunks` lists every chunk that legitimately answers (a split doc contributes several; some questions are answerable from either of two docs); pass = a gold chunk in the top `rank_within` (3). Run by `tests/test_retrieve_vector.py::test_vector_retrieval_gate`. |
 | `tests/test_retrieve_vector.py` | 5 unit (fake store — passage mapping, k pass-through, empty, metadata fallback) + 1 fixture-hygiene + 1 `@pytest.mark.pgvector` **gate**. |
 
 **Result:** gate **PASS** — B01–B08 all **rank 1**.
@@ -252,7 +249,7 @@ Goal: turn the merged context into a concise answer where every claim is cited.
 |------|--------------|
 | `src/pipeline/synthesize.py` | `synthesize(question, context, routing_used)` — one `chat_model.with_structured_output(SynthesisResult)` call (`gpt-oss-120b`). The context goes in under `GRAPH FACTS` / `RETRIEVED PASSAGES` headers (`merge.labelled_context`), each line/passage tagged `[chunk_id]`; the prompt requires a `Citation{claim, chunk_id, source_type}` per claim, `chunk_id` copied verbatim from a bracket. Empty context → a fixed "not enough information" answer, no LLM call. `allowed_chunk_ids` adds a `Cite ONLY from: […]` line (the validator's retry uses it). Assembles the `GroundedAnswer` (`graph_paths` = fact sentences, `vector_passages` = chunk ids, `latency_ms` = the call). |
 | `src/models/answer.py` (`SynthesisResult` lives in `synthesize.py`; `GroundedAnswer` gained `notes`) | `notes` carries validator actions through to the API response. |
-| `scripts/eval_synthesis.py` + `tests/fixtures/synthesis_eval.json` | 5 questions (VECTOR / GRAPH-neighbors / GRAPH-count / blast-radius / composition). Gate = non-empty answer, ≥1 citation, every `citation.chunk_id` in the retrieved set, every `must_mention` string present. |
+| `tests/fixtures/synthesis_eval.json` | 5 questions (VECTOR / GRAPH-neighbors / GRAPH-count / blast-radius / composition). Gate (`tests/test_synthesize.py::test_synthesis_gate`) = non-empty answer, ≥1 citation, every `citation.chunk_id` in the retrieved set, every `must_mention` string present. |
 | `tests/test_synthesize.py` | 3 unit (stub model — assembly, empty-context short-circuit, multi-citation) + 1 `llm+neo4j+pgvector` **gate**. |
 
 **Result:** gate **PASS** — 5/5 coherent + fully cited. Fixed while building:
@@ -268,7 +265,7 @@ Goal: guarantee every cited chunk id is one that retrieval actually returned.
 |------|--------------|
 | `src/pipeline/validate.py` | `validate_answer(answer, context, question)` — if every `citation.chunk_id ∈ context.chunk_ids`, return unchanged. Otherwise regenerate **once** with `allowed_chunk_ids=retrieved`, keep only the citations that are now valid, and append a note listing what was dropped. |
 | `src/pipeline/graph.py` (`compile_answer_pipeline`, `answer_question`) | Wraps the Phase 3.4 retrieval graph as a subgraph, then `synthesize` → `validate` nodes; a REFUSE route skips straight to `END` (no synthesis). `validate` folds the pipeline's `notes` (e.g. the graph→vector fallback note) into `answer.notes`. `answer_question(q)` is the singleton entry point. |
-| `scripts/eval_validation.py` | (1) 100% citation validity over the synthesis sample via the full `answer_question`; (2) a fabricated citation spliced into a real answer is removed by `validate_answer`. |
+| `tests/test_validate.py::test_validation_gate` | (1) 100% citation validity over the synthesis sample via the full `answer_question`; (2) a fabricated citation spliced into a real answer is removed by `validate_answer`. |
 | `tests/test_validate.py` | 3 unit (`validate_answer` pass-through / regenerate-and-filter / still-bad-note) + 4 pipeline-wiring (synthesize→validate order, REFUSE skips synthesis, fallback note reaches the answer) + 1 `llm+neo4j+pgvector` **gate**. |
 
 **Result:** gate **PASS** — 6/6 (5 valid + injection caught).
@@ -282,7 +279,7 @@ Goal: one HTTP entry point, correct status per route, honest latency.
 | `src/api/schemas.py` | `QueryRequest{question ≤1000 chars, top_k, max_hops}` (the last two accepted for forward-compat; pipeline uses its own defaults), `OutOfScope` (422 body), `ErrorBody` (400/503), `HealthResponse`. |
 | `src/api/dependencies.py` | `datastore_status()` pings Neo4j (`RETURN 1`) + Postgres (`SELECT 1`) and never raises; `require_datastores()` is the `/query` dependency that turns a down store into `GraphUnavailableError` → 503. |
 | `src/api/main.py` | `POST /query` → `answer_question`; REFUSE → 422 `{error:"out_of_scope", reason, message}`, blank/oversized body → 400 (a `RequestValidationError` handler reshapes FastAPI's default 422), `ApplicationError` → 503/500. `GET /health` → 200 with per-store status (`degraded` if one is down). The app builds no provider clients. |
-| `scripts/eval_api.py` → `API_METRICS.md` | Drives `TestClient` once per route (VECTOR/GRAPH/HYBRID/REFUSE), checks status + VECTOR-citation validity, writes the latency table. |
+| `tests/test_api.py::test_api_gate` | Drives `TestClient` once per route (VECTOR/GRAPH/HYBRID/REFUSE), checks status + VECTOR-citation validity. `API_METRICS.md` is a committed snapshot of one warm run's latency table. |
 | `tests/test_api.py` | 8 unit (stubbed `answer_question`, overridden dependency — answer shape, 422/400/503, health ok/degraded) + 1 `llm+neo4j+pgvector` **gate**. |
 
 **Result:** gate **PASS** — 4/4 routes correct. **Latency caveat:** the cold gate
@@ -301,34 +298,27 @@ otherwise-identical vector-only system.
 | File | What it does |
 |------|--------------|
 | `src/baselines/vector_only.py` | `answer_vector_only(q)` — `compile_answer_pipeline(router=_force_vector)`: the router is pinned to a `VECTOR` `RoutingDecision`, so every question goes `retrieve_vector → merge → synthesize → validate` and the graph node never runs. Same chunks, same embeddings, same synthesis prompt, same citation validator — the graph is the only variable. |
-| `scripts/benchmark.py` | Parses `data/benchmark/questions.md` (regex over `**Bnn.**` blocks + `## Category n` headers) into `tests/fixtures/benchmark_questions.json` (id, question, category ∈ {1-hop, 2-hop, 3-hop, aggregation, refusal}, gold route/answer/sources). Runs each question through `answer_question` (graph) and `answer_vector_only` (baseline), recording route used, answer, cited chunk ids, notes, latency, and a chars/4 token estimate. Writes `tests/fixtures/benchmark_run.json` **after every system call** so a quota-kill mid-run resumes cleanly (`--only graph|vector`, `--parse-only`). Emits `BENCHMARK_RESULTS.md` — a grading skeleton with a blank `G`/`V` column per row plus per-question detail. |
-| `scripts/score_benchmark.py` | Reads the filled `G`/`V` scores back from `BENCHMARK_RESULTS.md`, computes mean accuracy per category per system, checks the 5.2 gate (1-hop parity ±0.05; 2-hop Δ ≥ +0.15; 3-hop Δ ≥ +0.30; aggregation graph ≥ 0.80 & vector ≤ 0.20). |
-| `tests/test_benchmark.py` (7) | Parser (30 Qs, category/route/source extraction, gold-answer flattening) + scorer (score parsing, category means, gate checks) — all offline. |
+| `scripts/benchmark.py` | Parses `data/benchmark/questions.md` (regex over `**Bnn.**` blocks + `## Category n` headers) into `tests/fixtures/benchmark_questions.json` (id, question, category ∈ {1-hop, 2-hop, 3-hop, aggregation, refusal}, gold route/answer/sources). Runs each question through `answer_question` (graph) and `answer_vector_only` (baseline), recording route used, answer, cited chunk ids, notes, latency, and a chars/4 token estimate. Writes `tests/fixtures/benchmark_run.json` **after every system call** so a quota-kill mid-run resumes cleanly (`--only graph|vector`, `--parse-only`, `--questions B17,B24`). Emits `BENCHMARK_RESULTS.md` — a grading skeleton, then leaves it alone once it carries scores. |
+| `scripts/score_benchmark.py` | Reads the `G`/`V` scores back from `BENCHMARK_RESULTS.md`, computes mean accuracy per category per system, checks the 5.2 gate (1-hop parity ±0.05; 2-hop Δ ≥ +0.15; 3-hop Δ ≥ +0.30; aggregation graph ≥ 0.80 & vector ≤ 0.20). |
+| `tests/test_benchmark.py` (7) | Parser (the 14-question scoped set, category/route/source extraction, gold-answer flattening) + scorer (score parsing, category means, gate checks) — all offline. |
 
 **Concept:** the benchmark isolates one variable. Both systems share everything
 except routing, so a category-level accuracy gap is attributable to graph
 traversal, not to a better prompt or better chunks.
 
-**Free-tier note:** 30 questions × 2 systems × (route + plan + synth + maybe a
-validator regen) does not fit one day's Groq quota — hence the incremental,
-resumable run file.
+### 5.2 Grade + analyse ✅ — gate NOT met (that is the finding)
 
-### 5.2 Grade + analyse 🚧 (13/30 run, gate not met on the sample)
-
-| File | What it does |
-|------|--------------|
-| `BENCHMARK_RESULTS.md` | The 13-question run (all 1-hop, B09–B10, B17, B18, B24, B28) with **proposed** grades + a category reading table. |
-| `scripts/score_benchmark.py` | Parses the `G`/`V` columns back out, means per category, checks the gate (1-hop \|Δ\|≤0.05 · 2-hop Δ≥+0.15 · 3-hop Δ≥+0.30 · aggregation graph≥0.80 & vector≤0.20). |
-
-**Result — the graph did not beat vector-only on accuracy:**
+The question set was cut from 30 to **14** — what a single $0 free-tier run
+completes (`data/benchmark/questions.md` § Scope). Grades finalised in
+`BENCHMARK_RESULTS.md`; `scripts/score_benchmark.py` recomputes the reading.
 
 | Category | Graph | Vector | Δ | Gate met? |
 |----------|------:|-------:|--:|-----------|
-| 1-hop | 0.94 | 0.94 | 0.00 | yes (parity) |
-| 2-hop | 1.00 | 1.00 | 0.00 | no |
-| 3-hop | 0.75 | 0.75 | 0.00 | no |
-| aggregation | 1.00 | 1.00 | 0.00 | no |
-| refusal | 1.00 | 1.00 | — | — |
+| 1-hop (B01–B08) | 0.84 | 0.84 | 0.00 | yes (parity) |
+| 2-hop (B09–B10) | 1.00 | 1.00 | 0.00 | no |
+| 3-hop (B17; B18 graph-only) | 0.75 | 0.75 | 0.00 | no |
+| aggregation (B24) | 1.00 | 1.00 | 0.00 | no |
+| refusal (B28) | 1.00 | 1.00 | — | — |
 
 Two structural causes (full analysis in `FINDINGS.md`):
 1. **The corpus pre-aggregates** — `databases/postgresql.md` lists its 5 consumers
@@ -337,15 +327,14 @@ Two structural causes (full analysis in `FINDINGS.md`):
    traversal.
 2. **Template coverage is the ceiling** — B18 (`team→OWNS→service→CONSUMES→api→OWNED_BY→team`)
    fits none of the six `GraphQueryPlan` shapes; the planner degraded to
-   `neighbors` with a hallucinated anchor and returned nothing.
+   `neighbors` with a hallucinated anchor and returned nothing (7.8 min).
 
 Graph still shows an edge on **citation granularity** (B10: per-service sources)
 and **refusal routing** (B28: declines before retrieval) — neither a scored
 accuracy win.
 
-### 5.3 Writeup 🚧
+### 5.3 Writeup ✅
 
-`FINDINGS.md` (drafted — includes "when to reach for a graph", "why not
-`GraphCypherQAChain`", cost/latency honesty, productionisation) · `SETUP.md` ✅ ·
-README benchmark table ✅. Remaining: finalise once grades are confirmed and,
-optionally, run the other 17 questions.
+`FINDINGS.md` (corpus pre-aggregation, template ceiling, where the graph
+wins/loses, cost/latency honesty, *why not `GraphCypherQAChain`*, "when to reach
+for a graph") · `SETUP.md` · README benchmark table.

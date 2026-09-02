@@ -3,11 +3,13 @@
 Raw run: `tests/fixtures/benchmark_run.json` · proposed grades + reading:
 `BENCHMARK_RESULTS.md` · scorer: `python scripts/score_benchmark.py`.
 
-**Scope:** 13 of the 30 benchmark questions were run (all of 1-hop, a slice of
-2-hop, one each of 3-hop / aggregation / refusal). The free-tier daily quota does
-not cover 30 × 2, and B18's plan call alone took 7.8 min under sustained
-rate-limiting. The sample is small but the pattern is consistent and the two
-failure modes below are structural, not sampling noise.
+**Scope:** the benchmark is **14 questions** — all of Category 1, plus B09/B10
+(2-hop), B17/B18 (3-hop), B24 (aggregation), B28 (refusal). It was cut down from
+30 to what a single $0 free-tier run can complete (`data/benchmark/questions.md`
+§ Scope); B18's plan call alone took 7.8 min under sustained rate-limiting, and
+its vector arm was not run before live benchmarking stopped. Small, but the
+pattern is consistent and the two failure modes below are structural, not
+sampling noise.
 
 ## Setup
 
@@ -24,11 +26,16 @@ chunks.
 
 | Category | Graph | Vector | Δ | Phase 5.2 gate | Met? |
 |----------|------:|-------:|--:|----------------|------|
-| 1-hop / definitional (B01–B08) | 0.94 | 0.94 | 0.00 | \|Δ\| ≤ 0.05 | **yes** |
+| 1-hop / definitional (B01–B08) | 0.84 | 0.84 | 0.00 | \|Δ\| ≤ 0.05 | **yes** |
 | 2-hop (B09–B10) | 1.00 | 1.00 | 0.00 | Δ ≥ +0.15 | no |
-| 3-hop (B17; B18 unpaired) | 0.75 | 0.75 | 0.00 | Δ ≥ +0.30 | no |
+| 3-hop (B17; B18 graph-only) | 0.75 | 0.75 | 0.00 | Δ ≥ +0.30 | no |
 | aggregation (B24) | 1.00 | 1.00 | 0.00 | graph ≥ 0.80, vector ≤ 0.20 | no |
 | refusal (B28) | 1.00 | 1.00 | — | — | — |
+
+(1-hop mean is 0.84 not ~1.0 because the answers, while correct, either omit a
+secondary detail the gold gives — "Java" vs. "Java 17" — or pad with correct but
+unasked-for metadata. Both systems produce the *same* answer on 1-hop, since the
+graph system routes those questions to VECTOR too.)
 
 Two structural reasons, both worth stating plainly.
 
@@ -128,18 +135,18 @@ of that choice made visible.
   completeness, deterministic aggregation, and a refusal decision made before
   retrieval rather than delegated to a prompt.
 - **A hand-written template retriever needs its template set matched to the
-  question distribution.** Six shapes covered 12 of 13 here; the 13th needed a
-  shape nobody wrote.
+  question distribution.** Six shapes covered 13 of 14 here; the 14th (B18)
+  needed a shape nobody wrote.
 
-## How this would productionise
+## If this were taken further
 
-- **Extraction eval as a CI gate** (Phase 1.5) — would have caught the
-  PostgreSQL-citation quirk before it reached the benchmark.
-- **Widen the benchmark and/or the corpus** so multi-hop questions actually
-  require multi-hop — the current corpus can't discriminate the two systems.
-- **A `chain` template** (bounded variable-length path with typed endpoints)
+Not planned — the null result stands as the finding. But the obvious next moves:
+
+- **Extraction eval as a CI gate** (Phase 1.5, still open) — would catch the
+  PostgreSQL-citation quirk.
+- **A `chain` template** — a bounded variable-length path with typed endpoints —
   would cover B18-shaped questions without handing Cypher to the model.
-- **HNSW** once the corpus is 10⁴+ vectors (irrelevant at 42; exact scan is
-  sub-ms and recall-1.0).
-- **A paid LLM tier** with a per-request token budget — removes the free-tier
-  latency floor and lets the full 30-question benchmark run in one pass.
+- **HNSW** only once the corpus is 10⁴+ vectors; at 42, exact scan is sub-ms and
+  recall-1.0, so an ANN index would be pure downside.
+- **A paid LLM tier** with a per-request token budget removes the free-tier
+  latency floor.

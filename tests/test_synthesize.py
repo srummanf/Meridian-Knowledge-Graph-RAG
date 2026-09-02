@@ -1,16 +1,53 @@
 """Phase 4.1: synthesis.
 
 Unit tests use a stub model (no API). The ``llm`` gate runs the real pipeline +
-model over the 5-question sample.
+model over `tests/fixtures/synthesis_eval.json` and checks each answer is
+coherent and fully cited.
 """
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from scripts.eval_synthesis import check, load_eval_set
+from src.config import REPO_ROOT
 from src.models.answer import Citation, GraphFact, MergedContext, Passage
+from src.pipeline.graph import run_pipeline
 from src.pipeline.synthesize import SynthesisResult, synthesize
+
+FIXTURE = REPO_ROOT / "tests" / "fixtures" / "synthesis_eval.json"
+_NO_ANSWER = "The retrieved context does not contain"
+
+
+def _load_eval_set() -> list[dict]:
+    return json.loads(FIXTURE.read_text("utf-8"))["questions"]
+
+
+def _routing_used(route: str) -> str:
+    return route if route in ("VECTOR", "GRAPH", "HYBRID") else "HYBRID"
+
+
+def _check(item: dict) -> tuple[bool, str]:
+    """Full pipeline + synthesize; verify coherent + every citation grounded."""
+    state = run_pipeline(item["question"])
+    context = state["context"]
+    answer = synthesize(
+        item["question"], context, routing_used=_routing_used(state["route_used"])
+    )
+    retrieved = set(context.chunk_ids)
+    problems: list[str] = []
+    if not answer.answer.strip() or answer.answer.startswith(_NO_ANSWER):
+        problems.append("no answer produced")
+    if not answer.citations:
+        problems.append("no citations")
+    for c in answer.citations:
+        if not c.chunk_id or c.chunk_id not in retrieved:
+            problems.append(f"citation {c.chunk_id!r} not in retrieved set")
+    missing = [m for m in item.get("must_mention", []) if m.lower() not in answer.answer.lower()]
+    if missing:
+        problems.append(f"answer missing {missing}")
+    return not problems, "; ".join(problems)
 
 
 class StubModel:
@@ -54,7 +91,7 @@ def test_empty_context_short_circuits_without_calling_the_model() -> None:
     answer = synthesize("q", MergedContext(), routing_used="VECTOR", model=stub)
     assert stub.calls == 0
     assert answer.citations == []
-    assert answer.answer.startswith("The retrieved context does not contain")
+    assert answer.answer.startswith(_NO_ANSWER)
 
 
 def test_passes_through_multiple_citations() -> None:
@@ -78,6 +115,10 @@ def test_passes_through_multiple_citations() -> None:
 @pytest.mark.neo4j
 @pytest.mark.pgvector
 def test_synthesis_gate() -> None:
-    cases = [check(item) for item in load_eval_set()]
-    failed = [(c.question, c.detail) for c in cases if not c.ok]
+    failed = [
+        (item["question"], detail)
+        for item in _load_eval_set()
+        for ok, detail in [_check(item)]
+        if not ok
+    ]
     assert not failed, f"not coherent / fully cited: {failed}"

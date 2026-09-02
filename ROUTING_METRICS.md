@@ -1,6 +1,8 @@
 # Routing Metrics
 
-Router: `gpt-oss-20b` via `src/pipeline/router.py`. Eval set: `tests/fixtures/routing_eval.json` (21 questions).
+Snapshot of one run of the `tests/test_router.py` accuracy gate. Router:
+`gpt-oss-20b` via `src/pipeline/router.py`. Eval set:
+`tests/fixtures/routing_eval.json` (21 questions).
 
 **Accuracy: 95.2%** (gate ≥ 90%) — PASS
 
