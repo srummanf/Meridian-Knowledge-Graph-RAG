@@ -33,7 +33,7 @@ corpus. The Meridian documents are densely cross-referenced (a database's page
 lists every service that uses it), so vector search answers "multi-hop" questions
 from a single page. The graph still wins on citation precision, refusal handling,
 and questions no single document answers. Full analysis in
-[`FINDINGS.md`](./FINDINGS.md).
+[`docs/results/FINDINGS.md`](./docs/results/FINDINGS.md).
 
 | Category | Graph | Vector |
 |----------|------:|-------:|
@@ -44,6 +44,24 @@ and questions no single document answers. Full analysis in
 | refusal | 1.00 | 1.00 |
 
 A negative result, reported as a result. That is the point of the benchmark.
+
+---
+
+## Where to start
+
+Read in this order.
+
+| # | Document | For |
+|---|----------|-----|
+| 1 | [`docs/SETUP.md`](./docs/SETUP.md) | install everything and verify it works |
+| 2 | [`docs/WALKTHROUGH.md`](./docs/WALKTHROUGH.md) | run the pipeline and the tests, step by step, with expected output |
+| 3 | [`docs/STRUCTURE.md`](./docs/STRUCTURE.md) | what every folder and file does |
+| 4 | [`docs/spec/architecture.md`](./docs/spec/architecture.md) | the system design |
+| 5 | [`docs/results/FINDINGS.md`](./docs/results/FINDINGS.md) | the benchmark analysis — where the graph wins and loses |
+| 6 | [`docs/BRIEF.md`](./docs/BRIEF.md) | the original brief, annotated with what shipped |
+
+The rest of this README is the summary: features, architecture diagrams, the
+five build steps, and the API reference.
 
 ---
 
@@ -99,8 +117,9 @@ The build follows a strict split:
 against a live database is an injection risk and makes results non-reproducible.
 A typed plan mapped to fixed templates trades some coverage for safety.
 
-See [`architecture.md`](./architecture.md) for the full design and
-[`PHASE_BUILD.md`](./PHASE_BUILD.md) for a file-by-file build log.
+See [`docs/spec/architecture.md`](./docs/spec/architecture.md) for the full
+design and [`docs/spec/BUILD_LOG.md`](./docs/spec/BUILD_LOG.md) for a file-by-file
+build log.
 
 ### Ingestion (one-time, cached)
 
@@ -136,22 +155,15 @@ flowchart TD
 
 ```
 .
-├── data/                     Meridian corpus (37 docs) + ontology, schema, benchmark
-├── src/
-│   ├── config.py             the only file that builds provider clients
-│   ├── models/               Pydantic v2 models (domain, extraction, routing, answer)
-│   ├── ingest/               chunk, extract, resolve, load_graph, load_vector
-│   ├── graph/                Neo4j client + every Cypher string (queries.py)
-│   ├── pipeline/             router, retrieve_graph, retrieve_vector, merge,
-│   │                         synthesize, validate, graph.py (StateGraph)
-│   ├── baselines/            vector_only.py (the benchmark control)
-│   └── api/                  FastAPI app: POST /query, GET /health
-├── scripts/                  check_setup, ingest_corpus, benchmark, score_benchmark
-├── tests/                    one test module per source module + fixtures/
-└── docs/                     walkthrough, file guide
+├── data/         Meridian corpus (37 docs) + ontology, schema, benchmark
+├── src/          the system: models, ingest, graph, pipeline, baselines, api
+├── scripts/      check_setup, ingest_corpus, ask, benchmark, score_benchmark
+├── tests/        one test module per source module + fixtures/
+└── docs/         setup, walkthrough, structure, results/, spec/
 ```
 
-A per-file explanation is in [`docs/FILE_GUIDE.md`](./docs/FILE_GUIDE.md).
+Full explanation — every folder and file — in
+[`docs/STRUCTURE.md`](./docs/STRUCTURE.md).
 
 ---
 
@@ -180,48 +192,52 @@ pip install -e ".[dev]"
 cp .env.example .env                                # then fill GROQ_API_KEY and GOOGLE_API_KEY
 
 # 4. verify setup
-python scripts/check_setup.py                       # expect: Phase 0 gate: PASS
+python scripts/check_setup.py                       # expect a PASS line at the end
 
 # 5. build the indexes (about 2 minutes, $0 from cache)
 python scripts/ingest_corpus.py --wipe
 
-# 6. serve
-uvicorn src.api.main:app --reload                   # http://localhost:8000/docs
+# 6. ask a question
+python scripts/ask.py "Which services use PostgreSQL?"
 ```
 
 Detailed notes (Windows Postgres port clash, Hugging Face cold start, free-tier
-limits) are in [`SETUP.md`](./SETUP.md).
+limits) are in [`docs/SETUP.md`](./docs/SETUP.md).
 
 ---
 
 ## Demo
 
-Ask a question once the API is running:
+```bash
+python scripts/ask.py "If Log4Shell is exploited, which Meridian products are affected?"
+```
+
+```
+route:   GRAPH
+latency: 8670 ms
+
+Ledger Service and Payments Platform are affected.
+
+sources:
+  - [GRAPH] libraries/log4j.md
+  - [GRAPH] vulnerabilities/cve-2021-44228-log4shell.md
+```
 
 ```bash
-curl -s localhost:8000/query -H 'content-type: application/json' \
-  -d '{"question": "If Log4Shell is exploited, which Meridian products are affected?"}'
+python scripts/ask.py "Is PostgreSQL better than MySQL?"
 ```
 
-```json
-{
-  "question": "If Log4Shell is exploited, which Meridian products are affected?",
-  "answer": "Ledger Service and Payments Platform are affected.",
-  "citations": [
-    { "claim": "The Ledger Service depends on Log4j", "chunk_id": "libraries/log4j.md", "source_type": "GRAPH" }
-  ],
-  "routing_used": "GRAPH",
-  "graph_paths": ["The vulnerability affects Log4j.", "Ledger Service depends on Log4j."],
-  "latency_ms": 8670
-}
+```
+route:   REFUSE
+answer:  Out of scope. This system answers questions about Meridian's architecture
+         and ownership, not opinions, forecasts, or costs.
 ```
 
-(Answer text illustrative; latency is a real warm-cache measurement.)
+`--json` prints the raw `GroundedAnswer`. To serve the HTTP API instead:
+`uvicorn src.api.main:app` and open `http://localhost:8000/docs`.
 
-A full walkthrough — every script and test from Phase 1 to Phase 5, with
-expected output — is in [`docs/WALKTHROUGH.md`](./docs/WALKTHROUGH.md).
-
-Quick test run:
+A full walkthrough — every script and test from Step 1 to Step 5, with expected
+output — is in [`docs/WALKTHROUGH.md`](./docs/WALKTHROUGH.md).
 
 ```bash
 pytest -m "not llm and not neo4j and not pgvector"   # 237 offline tests, ~20 s
@@ -257,12 +273,32 @@ Interactive docs at `/docs` when the server is running.
 
 ---
 
+## Build steps
+
+The project was built in five steps. The plan is
+[`docs/spec/PLAN.md`](./docs/spec/PLAN.md); the file-by-file log is
+[`docs/spec/BUILD_LOG.md`](./docs/spec/BUILD_LOG.md).
+
+| Step | What | State |
+|------|------|-------|
+| Setup | Docker, config, `check_setup.py` | done |
+| 1 — Data ingestion | chunk → extract → resolve → load Neo4j + pgvector | done (42/42 chunks, 43 entities, 222 relationships) |
+| 2 — RAG pipeline | router, retrievers, merge, synthesize, validate, LangGraph | done (router 95%, 100% citation validity) |
+| 3 — API | `POST /query`, `GET /health`, `scripts/ask.py` | done |
+| 4 — Testing | one test module per source module + integration gates | done (237 offline + gates) |
+| 5 — Benchmark | vector-only baseline, run, grade, analyse | done (parity — see the Result above) |
+
+Open items are in the Roadmap below. The extraction eval (a labelled F1 check)
+was planned but not built.
+
+---
+
 ## Roadmap
 
-Phases 0–5 are complete. Known open items, in rough priority order:
+All five steps are complete. Known open items, in rough priority order:
 
-- **Extraction eval (Phase 1.5)** — a labelled precision/recall/F1 check on the
-  ~25 benchmark-critical relationships. Would catch the known citation-attribution
+- **Extraction eval** — a labelled precision/recall/F1 check on the ~25
+  benchmark-critical relationships. Would catch the known citation-attribution
   bug where every `USES PostgreSQL` edge points at the CVE document.
 - **A `chain` query template** — a bounded variable-length path with typed
   endpoints, to cover genuine 3-hop questions (the one benchmark question the
@@ -299,17 +335,18 @@ Phases 0–5 are complete. Known open items, in rough priority order:
 
 ## Documentation
 
-| File | Contents |
-|------|----------|
-| [`docs/WALKTHROUGH.md`](./docs/WALKTHROUGH.md) | run every script and test, phase by phase, with expected output |
-| [`docs/FILE_GUIDE.md`](./docs/FILE_GUIDE.md) | one line per source file |
-| [`architecture.md`](./architecture.md) | system design, data models, module responsibilities |
-| [`PHASE_BUILD.md`](./PHASE_BUILD.md) | file-by-file build log with rationale |
-| [`FINDINGS.md`](./FINDINGS.md) | benchmark analysis: where the graph wins and loses |
-| [`BENCHMARK_RESULTS.md`](./BENCHMARK_RESULTS.md) | per-question graded results |
-| [`SETUP.md`](./SETUP.md) | detailed local setup and gotchas |
-| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | conventions if you want to open a PR |
-| [`README_SPEC.md`](./README_SPEC.md) | index to the original planning docs (`prd`, `architecture`, `rules`, `phases`) |
+| Document | Contents |
+|----------|----------|
+| [`docs/SETUP.md`](./docs/SETUP.md) | detailed local setup and gotchas |
+| [`docs/WALKTHROUGH.md`](./docs/WALKTHROUGH.md) | run every script and test, step by step, with expected output |
+| [`docs/STRUCTURE.md`](./docs/STRUCTURE.md) | what every folder and file does |
+| [`docs/BRIEF.md`](./docs/BRIEF.md) | the original project brief, annotated with what shipped |
+| [`docs/results/FINDINGS.md`](./docs/results/FINDINGS.md) | benchmark analysis: where the graph wins and loses |
+| [`docs/results/BENCHMARK_RESULTS.md`](./docs/results/BENCHMARK_RESULTS.md) | per-question graded results |
+| [`docs/spec/architecture.md`](./docs/spec/architecture.md) | system design, data models, module responsibilities |
+| [`docs/spec/PLAN.md`](./docs/spec/PLAN.md) | the five-step build plan |
+| [`docs/spec/BUILD_LOG.md`](./docs/spec/BUILD_LOG.md) | file-by-file build log with rationale |
+| [`docs/spec/prd.md`](./docs/spec/prd.md) · [`docs/spec/rules.md`](./docs/spec/rules.md) | the original requirements and coding rules |
 | [`data/README.md`](./data/README.md) · [`data/ONTOLOGY.md`](./data/ONTOLOGY.md) | the corpus and its vocabulary |
 
 ---

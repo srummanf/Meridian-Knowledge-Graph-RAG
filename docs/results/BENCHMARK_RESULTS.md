@@ -35,7 +35,7 @@ finish (`data/benchmark/questions.md` § Scope). B18's plan call alone took
 | aggregation (B24) | 1.00 | 1.00 | 0.00 | graph ≥ 0.80, vector ≤ 0.20 | no (vector = 1.00) |
 | refusal (B28) | 1.00 | 1.00 | — | — | — |
 
-**The Phase 5.2 gate is not met on this sample.** Two causes, both real and
+**The gate is not met on this sample.** Two causes, both real and
 both worth writing up (see `FINDINGS.md`):
 
 1. **The corpus pre-aggregates.** `databases/postgresql.md` lists its five

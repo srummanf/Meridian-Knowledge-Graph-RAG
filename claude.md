@@ -2,17 +2,18 @@
 
 **Version:** 3.0 · **Updated:** 2026-09-01
 
-The spec is in `prd.md`, `architecture.md`, `rules.md`, `phases.md`; the corpus
-contract is in `data/ONTOLOGY.md` and `data/SCHEMA.md`.
+The spec is in `docs/spec/` (`prd.md`, `architecture.md`, `rules.md`, `PLAN.md`);
+the corpus contract is in `data/ONTOLOGY.md` and `data/SCHEMA.md`.
 
-`PHASE_BUILD.md` is a file-by-file build log (what each module does + why). Keep
-it and the Progress table in `README.md` updated at the end of every sub-phase.
+`docs/spec/BUILD_LOG.md` is a file-by-file build log (what each module does +
+why). Keep it and the build-steps table in `README.md` updated at the end of
+every sub-step.
 
 ---
 
 ## 1. Split of responsibility
 
-**You decide:** what to build next (from `phases.md`), architecture/ontology
+**You decide:** what to build next (from `docs/spec/PLAN.md`), architecture/ontology
 changes, whether a gate is met, trade-offs.
 
 **Claude does:** implementation, boilerplate, tests, debugging, refactors — one
@@ -23,7 +24,7 @@ component at a time, following `rules.md`.
 ## 2. Prompt shape
 
 ```
-Phase: 3.1 — Router
+Step: 2.1 — Router
 File: src/pipeline/router.py
 
 Task: LangGraph node that classifies a question into VECTOR/GRAPH/HYBRID/REFUSE.
@@ -36,7 +37,7 @@ Requirements:
 - rules.md: function < 60 lines, type hints, docstring, named constants
 
 Done when: tests/test_router.py hits >= 90% on the labelled set
-Reference: architecture.md section 6 (hand-written), rules.md section 5.1
+Reference: docs/spec/architecture.md section 6, docs/spec/rules.md section 5.1
 ```
 
 One file / one node per prompt. Reference the doc section, don't re-paste it.
@@ -73,14 +74,14 @@ content. Claude can propose; you commit.
 
 ## 6. Debugging prompts
 
-Give the exact error, what you expected, the phase, the relevant code. Ask for a
+Give the exact error, what you expected, the step, the relevant code. Ask for a
 diagnosis before a fix.
 
 ---
 
 ## 7. Session hygiene
 
-Start: "Phase X.Y, here's what's done, next file." End: files changed + next
+Start: "Step X.Y, here's what's done, next file." End: files changed + next
 task. Claude doesn't remember across sessions — the docs do, so when a decision
 changes, update the relevant spec doc in the same session.
 

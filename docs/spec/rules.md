@@ -117,7 +117,7 @@ it $0. Good habit, good talking point.
 
 ### 5.1 Router
 `router_model.with_structured_output(RoutingDecision)`. `confidence < 0.70 →
-HYBRID`. Log question + route + confidence for every call — Phase 5 needs it.
+HYBRID`. Log question + route + confidence for every call — the benchmark needs it.
 
 ### 5.2 Resolve entities before the graph query
 LLM lists entity mentions → map to node ids via canonical name + alias table →

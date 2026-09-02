@@ -1,4 +1,4 @@
-"""Phase 0 gate check.
+"""Setup gate check.
 
 Verifies both databases are reachable and both LLM providers + local embeddings
 work. Run after ``docker-compose up`` and filling in ``.env``:
@@ -107,7 +107,7 @@ def main() -> int:
         print(f"  [{'OK  ' if ok else 'FAIL'}] {name}")
 
     passed = all(checks.values())
-    print(f"\nPhase 0 gate: {'PASS' if passed else 'FAIL'}")
+    print(f"\nSetup gate: {'PASS' if passed else 'FAIL'}")
     return 0 if passed else 1
 
 

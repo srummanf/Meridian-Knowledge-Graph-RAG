@@ -1,13 +1,29 @@
 # Walkthrough
 
-Every script and test, phase by phase, with the output to expect. Assumes the
-setup in [`../SETUP.md`](../SETUP.md) is done: containers up, `.venv` active,
+Every script and test, step by step, with the output to expect. Assumes the
+setup in [`SETUP.md`](./SETUP.md) is done: containers up, `.venv` active,
 `pip install -e ".[dev]"`, `.env` filled.
 
 Run scripts with the repo root on the path:
 
 ```bash
 export PYTHONPATH=.          # Windows PowerShell: $env:PYTHONPATH="."
+```
+
+## The sequence
+
+```mermaid
+flowchart TD
+    A["check_setup.py<br/>databases + LLMs reachable"] --> B["Step 1 — Data ingestion<br/>ingest_corpus.py --wipe"]
+    B --> C["Step 2 — RAG pipeline<br/>router, retrievers, merge,<br/>synthesize, validate"]
+    C --> D["Step 3 — API<br/>uvicorn / scripts/ask.py"]
+    D --> E["Step 4 — Testing<br/>pytest (offline + gates)"]
+    E --> F["Step 5 — Benchmark<br/>benchmark.py, score_benchmark.py"]
+
+    B -.verified by.-> b1["pytest test_models, test_chunk,<br/>test_extract, test_resolve,<br/>test_load_graph, test_load_vector"]
+    C -.verified by.-> c1["pytest test_router, test_retrieve_*,<br/>test_merge, test_pipeline,<br/>test_synthesize, test_validate"]
+    D -.verified by.-> d1["pytest test_api"]
+    F -.verified by.-> f1["pytest test_benchmark"]
 ```
 
 Markers used below:
@@ -17,11 +33,11 @@ Markers used below:
 | _(none)_ | nothing external |
 | `-m neo4j` | Neo4j running + corpus loaded |
 | `-m pgvector` | Postgres running + corpus loaded |
-| `-m llm` | Groq/Google keys (calls are cached after the first run) |
+| `-m llm` | Groq / Google keys (calls are cached after the first run) |
 
 ---
 
-## Phase 0 — Setup
+## Getting started
 
 ```bash
 python scripts/check_setup.py
@@ -37,39 +53,35 @@ LLM providers.
 [ok] Groq         openai/gpt-oss-120b
 [ok] Google       gemini-3.6-flash
 
-Phase 0 gate: PASS
+Setup gate: PASS
 ```
 
 ---
 
-## Phase 1 — Knowledge graph
+## Step 1 — Data ingestion
 
-### 1.1–1.3  Models, chunking, extraction (offline tests)
+### Offline tests (models, chunking, extraction, resolution)
 
 ```bash
-pytest tests/test_models.py tests/test_chunk.py tests/test_extract.py -m "not llm"
+pytest tests/test_models.py tests/test_chunk.py tests/test_extract.py \
+       tests/test_resolve.py tests/test_load_graph.py -m "not llm and not neo4j"
 ```
 
 ```
-tests/test_models.py ...................................  [ 41%]
-tests/test_chunk.py ...............                       [ 59%]
-tests/test_extract.py ..................                  [100%]
-
-66 passed
+... passed
 ```
 
 The `-m llm` tests in `test_extract.py` do a real (cached) extraction of three
 service documents and check the retry-on-invalid-JSON path.
 
-### 1.4  Build the graph
+### Build the graph and the vector index
 
 ```bash
 python scripts/ingest_corpus.py --wipe
 ```
 
 Chunks the corpus, extracts entities and relationships (cache hits, no API
-calls), resolves aliases and duplicates, and `MERGE`s everything into Neo4j and
-pgvector.
+calls), resolves aliases and duplicates, then `MERGE`s into Neo4j and pgvector.
 
 ```
 === ingest summary ===
@@ -91,65 +103,42 @@ relationships by type:
   OWNED_BY           27
   ...
 
-Phase 1.4 gate: CHECK
+Ingestion gate: CHECK
 ```
 
 `CHECK` means the counts are just outside the originally planned ranges (43
-entities vs. 45–65; 222 edges vs. 140–200). Both are explained in the summary and
-in the main README appendix — the corpus really has 43 distinct entities, and
-edges are keyed on `source_chunk_id` for provenance.
+entities vs. 45–65; 222 edges vs. 140–200), both explained in the summary and the
+README appendix — the corpus really has 43 distinct entities, and edges are keyed
+on `source_chunk_id` for provenance.
 
 Re-run it — the counts do not change. That is the idempotency guarantee.
 
-```bash
-pytest tests/test_resolve.py tests/test_load_graph.py -m "not neo4j"
-python scripts/ingest_corpus.py --wipe        # run twice; same 43 / 222
-```
+> **Note.** `pytest -m neo4j` includes `test_load_graph.py`, and `-m pgvector`
+> includes `test_load_vector.py`; both **wipe and rebuild** their index. After
+> running the full marked suite, re-run `python scripts/ingest_corpus.py --wipe`.
 
-> **Note.** `pytest -m neo4j` includes `test_load_graph.py`, which wipes and
-> rebuilds Neo4j. After running the full marked suite, re-run
-> `python scripts/ingest_corpus.py --wipe` to restore the index.
-
----
-
-## Phase 2 — Vector index
-
-### 2.1–2.2  Embed, store, recall check
+### Vector recall check
 
 ```bash
 pytest tests/test_load_vector.py tests/test_retrieve_vector.py -m "not pgvector"
-```
-
-```
-9 passed
-```
-
-The `pgvector` gates:
-
-```bash
 pytest tests/test_retrieve_vector.py -m pgvector
 ```
 
 ```
 tests/test_retrieve_vector.py::test_vector_retrieval_gate PASSED
 tests/test_retrieve_vector.py::test_recall_at_5_clears_the_gate PASSED
-
-2 passed
 ```
 
 `test_recall_at_5_clears_the_gate` runs 12 definitional questions through
 `retrieve_vector` and checks the gold chunk lands in the top 5. Result: recall@1
 is 1.00 — with ~42 distinct-topic vectors and an exact scan, the nearest chunk is
-the right chunk, which is exactly why there is no ANN index.
-
-> `test_load_vector.py -m pgvector` rebuilds the `meridian_chunks` collection —
-> re-run the ingest afterwards.
+the right chunk, which is why there is no ANN index.
 
 ---
 
-## Phase 3 — Routing and retrieval
+## Step 2 — RAG pipeline
 
-### 3.1  Router
+### Router
 
 ```bash
 pytest tests/test_router.py -m "not llm"          # confidence-floor + fixture hygiene
@@ -161,9 +150,10 @@ tests/test_router.py::test_router_accuracy_clears_the_gate PASSED
 ```
 
 Accuracy is 95.2% on 21 labelled questions disjoint from the few-shot examples.
-`ROUTING_METRICS.md` is a committed snapshot of one run's confusion matrix.
+[`results/ROUTING_METRICS.md`](./results/ROUTING_METRICS.md) is a committed
+snapshot of one run's confusion matrix.
 
-### 3.2  Graph retriever
+### Graph retriever
 
 ```bash
 pytest tests/test_retrieve_graph.py -m "not llm and not neo4j"   # pure + fake-client
@@ -174,56 +164,69 @@ pytest tests/test_retrieve_graph.py -m "llm and neo4j"           # gate: B09/B14
 tests/test_retrieve_graph.py::test_graph_retrieval_gate PASSED
 ```
 
-The gate checks that each question returns the exact set of gold nodes and that
-the Cypher runs in under 200 ms (it runs in 12–56 ms).
+The gate checks each question returns the exact set of gold nodes and the Cypher
+runs under 200 ms (it runs in 12–56 ms).
 
-### 3.3  Vector retriever
+### Vector retriever
 
-Covered in Phase 2 above (`test_retrieve_vector.py`).
+Covered above (`test_retrieve_vector.py`).
 
-### 3.4  Merge and pipeline
+### Merge and pipeline wiring
 
 ```bash
 pytest tests/test_merge.py tests/test_pipeline.py
 ```
 
-```
-14 passed
-```
-
 `test_pipeline.py` exercises every route and both fallback edges (graph empty →
 vector, nothing retrieved → REFUSE) with fake retrieval functions.
 
----
-
-## Phase 4 — Synthesis and API
-
-### 4.1  Synthesize
+### Synthesis and citation validation
 
 ```bash
-pytest tests/test_synthesize.py -m "not llm"      # stub model
-pytest tests/test_synthesize.py -m llm            # gate: 5 sample answers (cached)
+pytest tests/test_synthesize.py tests/test_validate.py -m "not llm"
+pytest tests/test_synthesize.py tests/test_validate.py -m llm
 ```
 
 ```
 tests/test_synthesize.py::test_synthesis_gate PASSED
-```
-
-Every sample answer is non-empty, has at least one citation, and every cited
-`chunk_id` is in the retrieved set.
-
-### 4.2  Validate citations
-
-```bash
-pytest tests/test_validate.py -m "not llm"        # regeneration logic
-pytest tests/test_validate.py -m llm              # gate: 100% validity + injection catch
-```
-
-```
 tests/test_validate.py::test_validation_gate PASSED
 ```
 
-### 4.3  API
+Every sample answer is non-empty, has at least one citation, and every cited
+`chunk_id` is in the retrieved set. The validation gate also splices a fake
+citation into a real answer and checks it is removed.
+
+### Ask a question
+
+```bash
+python scripts/ask.py "Which services use PostgreSQL?"
+```
+
+```
+route:   GRAPH
+latency: 8 ms
+
+Auth Service, Billing Service, Ledger Service, Reporting Service, and User Service use PostgreSQL.
+
+sources:
+  - [GRAPH] databases/postgresql.md
+```
+
+```bash
+python scripts/ask.py "Is PostgreSQL better than MySQL?"
+```
+
+```
+route:   REFUSE
+answer:  Out of scope. This system answers questions about Meridian's architecture
+         and ownership, not opinions, forecasts, or costs.
+```
+
+`--json` prints the raw `GroundedAnswer`.
+
+---
+
+## Step 3 — API
 
 ```bash
 pytest tests/test_api.py -m "not llm"             # 400 / 422 / 503 / health, stubbed
@@ -234,61 +237,63 @@ pytest tests/test_api.py -m llm                   # gate: one real request per r
 tests/test_api.py::test_api_gate PASSED
 ```
 
-Then run it for real:
+Then run the server:
 
 ```bash
 uvicorn src.api.main:app
-curl -s localhost:8000/query -H 'content-type: application/json' \
-  -d '{"question": "Which services use PostgreSQL?"}' | python -m json.tool
 ```
 
-```json
-{
-  "question": "Which services use PostgreSQL?",
-  "answer": "Auth Service, Billing Service, Ledger Service, Reporting Service, and User Service use PostgreSQL.",
-  "citations": [ ... ],
-  "routing_used": "GRAPH",
-  "latency_ms": 7773
-}
+`scripts/ask.py` calls the pipeline directly (no server needed). To hit the HTTP
+endpoint, open `http://localhost:8000/docs` and use the interactive form, or call
+it from Python:
+
+```python
+import httpx
+r = httpx.post("http://localhost:8000/query", json={"question": "Which services use PostgreSQL?"})
+print(r.status_code, r.json()["answer"])
 ```
 
-An out-of-scope question returns `422`:
+An out-of-scope question returns `422` with `{"error": "out_of_scope", ...}`.
+
+---
+
+## Step 4 — Testing (everything at once)
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/query \
-  -H 'content-type: application/json' \
-  -d '{"question": "Is PostgreSQL better than MySQL?"}'
-# 422
+# offline — fast, no external services
+pytest -m "not llm and not neo4j and not pgvector"
+# -> 237 passed
+
+# integration gates — needs containers + keys (cached calls)
+pytest -m "llm or neo4j or pgvector"
+
+# restore the indexes, since test_load_graph / test_load_vector wipe them:
+python scripts/ingest_corpus.py --wipe
 ```
 
 ---
 
-## Phase 5 — Benchmark
+## Step 5 — Benchmark
 
-### 5.1  Run both systems
-
-```bash
-python scripts/benchmark.py
-```
-
-Runs all 14 benchmark questions through the graph pipeline and the vector-only
-baseline. Writes `tests/fixtures/benchmark_run.json` after every call, so it
-resumes if interrupted (the free-tier quota will not finish it in one pass on a
-cold cache). To run a subset:
+### Run both systems
 
 ```bash
-python scripts/benchmark.py --questions B17,B24,B28
+python scripts/benchmark.py                      # all 14 questions, both systems
+python scripts/benchmark.py --questions B17,B24   # a subset
 ```
+
+Writes `tests/fixtures/benchmark_run.json` after every call, so it resumes if
+interrupted (a cold-cache run will not finish in one pass on the free tier).
 
 ```
 ran 14 questions x 2 system(s)
-raw -> benchmark_run.json   grading skeleton -> BENCHMARK_RESULTS.md
+raw -> benchmark_run.json   grading skeleton -> docs/results/BENCHMARK_RESULTS.md
 ```
 
-### 5.2  Score
+### Score
 
-`BENCHMARK_RESULTS.md` already carries the manual grades. Recompute the category
-means and gate:
+The results file already carries the manual grades. Recompute the category means
+and gate:
 
 ```bash
 python scripts/score_benchmark.py
@@ -302,27 +307,11 @@ category       graph  vector   delta  gate
 3-hop           0.75    0.75   +0.00 [ FAIL] delta=+0.00 >= 0.3  (1 ungraded)
 aggregation     1.00    1.00   +0.00 [ FAIL] graph=1.00>=0.8, vector=1.00<=0.2
 refusal         1.00    1.00   +0.00 [  ok ] not gated
-
-Phase 5.2 gate: INCOMPLETE / FAIL
 ```
 
-The `FAIL` rows are the finding, not a bug. See [`../FINDINGS.md`](../FINDINGS.md).
+The `FAIL` rows are the finding, not a bug — see
+[`results/FINDINGS.md`](./results/FINDINGS.md).
 
 ```bash
 pytest tests/test_benchmark.py                    # parser + scorer, offline
-```
-
----
-
-## Everything at once
-
-```bash
-# offline — fast, no external services
-pytest -m "not llm and not neo4j and not pgvector"
-# -> 237 passed
-
-# gates — needs containers + keys (cached calls)
-pytest -m "llm or neo4j or pgvector"
-# then restore the indexes, since some marked tests wipe them:
-python scripts/ingest_corpus.py --wipe
 ```

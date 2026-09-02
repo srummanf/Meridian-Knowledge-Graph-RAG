@@ -1,7 +1,7 @@
 # Findings — Graph RAG vs. Vector-only on the Meridian corpus
 
 Raw run: `tests/fixtures/benchmark_run.json` · proposed grades + reading:
-`BENCHMARK_RESULTS.md` · scorer: `python scripts/score_benchmark.py`.
+[`BENCHMARK_RESULTS.md`](./BENCHMARK_RESULTS.md) · scorer: `python scripts/score_benchmark.py`.
 
 **Scope:** the benchmark is **14 questions** — all of Category 1, plus B09/B10
 (2-hop), B17/B18 (3-hop), B24 (aggregation), B28 (refusal). It was cut down from
@@ -24,7 +24,7 @@ chunks.
 
 ## Headline: the graph did not beat the baseline on this benchmark
 
-| Category | Graph | Vector | Δ | Phase 5.2 gate | Met? |
+| Category | Graph | Vector | Δ | Gate | Met? |
 |----------|------:|-------:|--:|----------------|------|
 | 1-hop / definitional (B01–B08) | 0.84 | 0.84 | 0.00 | \|Δ\| ≤ 0.05 | **yes** |
 | 2-hop (B09–B10) | 1.00 | 1.00 | 0.00 | Δ ≥ +0.15 | no |
@@ -97,7 +97,7 @@ that set.
   extracted from `vulnerabilities/cve-2024-0985-postgresql.md` (that doc happens
   to enumerate the affected services), so on B09/B24 the graph cites the CVE doc
   for "the Auth Service uses PostgreSQL" while the baseline cites
-  `databases/postgresql.md`. This is an extraction-quality artifact — Phase 1.5
+  `databases/postgresql.md`. This is an extraction-quality artifact — the extraction eval
   (a labelled extraction eval) would catch and fix it — not a property of graph
   retrieval.
 - **Latency.** The graph route adds a plan LLM call and a Cypher round-trip. Warm
@@ -142,7 +142,7 @@ of that choice made visible.
 
 Not planned — the null result stands as the finding. But the obvious next moves:
 
-- **Extraction eval as a CI gate** (Phase 1.5, still open) — would catch the
+- **Extraction eval as a CI gate** (still open) — would catch the
   PostgreSQL-citation quirk.
 - **A `chain` template** — a bounded variable-length path with typed endpoints —
   would cover B18-shaped questions without handing Cypher to the model.

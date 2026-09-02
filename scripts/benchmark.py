@@ -1,4 +1,4 @@
-"""Phase 5.1 — run the 30-question benchmark through both systems.
+"""Step 5 — run the benchmark through both systems.
 
 1. Parse ``data/benchmark/questions.md`` into
    ``tests/fixtures/benchmark_questions.json`` (id, question, category, gold
@@ -9,7 +9,7 @@
    estimated token count.
 3. Write the raw run to ``tests/fixtures/benchmark_run.json`` (incrementally, so
    a kill mid-run loses nothing) and a grading skeleton to ``BENCHMARK_RESULTS.md``
-   for the manual scoring in Phase 5.2.
+   for the manual scoring step.
 
     python scripts/benchmark.py                 # both systems, all questions
     python scripts/benchmark.py --only graph    # one system
@@ -41,7 +41,7 @@ log = get_logger("benchmark")
 QUESTIONS_MD = REPO_ROOT / "data" / "benchmark" / "questions.md"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "benchmark_questions.json"
 RUN_JSON = REPO_ROOT / "tests" / "fixtures" / "benchmark_run.json"
-RESULTS_MD = REPO_ROOT / "BENCHMARK_RESULTS.md"
+RESULTS_MD = REPO_ROOT / "docs" / "results" / "BENCHMARK_RESULTS.md"
 
 CATEGORY_LABELS = {
     "1": "1-hop",

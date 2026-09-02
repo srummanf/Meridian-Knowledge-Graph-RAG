@@ -50,10 +50,10 @@ matches `docker-compose.yml`.
 ## 4. Verify
 
 ```bash
-python scripts/check_setup.py        # Phase 0 gate — pings both DBs + both LLMs + local embeddings
+python scripts/check_setup.py        # setup gate — pings both DBs + both LLMs + local embeddings
 ```
 
-Expect `Phase 0 gate: PASS`.
+Expect a `PASS` line at the end.
 
 ## 5. Build the indexes
 
@@ -72,7 +72,7 @@ and it can exhaust a free-tier daily quota — see below).
 
 ```bash
 uvicorn src.api.main:app --reload      # then POST /query, GET /health
-python scripts/benchmark.py            # Graph RAG vs. vector-only (Phase 5)
+python scripts/benchmark.py            # Graph RAG vs. vector-only
 ```
 
 ## Testing

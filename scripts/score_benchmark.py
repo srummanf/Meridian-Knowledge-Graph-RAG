@@ -1,9 +1,9 @@
-"""Phase 5.2 — score the manually-graded benchmark.
+"""Step 5 — score the manually-graded benchmark.
 
 Reads the ``| ID | Cat | Question | Gold route | Graph route | G | V | Notes |``
 table in ``BENCHMARK_RESULTS.md`` (fill the ``G`` / ``V`` columns with a rubric
 score each: 0, 0.25, 0.5, 0.75, 1.0), then reports mean accuracy per category
-for each system and checks the Phase 5.2 gate:
+for each system and checks the benchmark gate:
 
 - 1-hop:        |graph - vector| <= 0.05        (parity)
 - 2-hop:        graph - vector   >= 0.15
@@ -28,7 +28,7 @@ from src.logging_config import configure_logging, get_logger
 configure_logging()
 log = get_logger("score_benchmark")
 
-RESULTS_MD = REPO_ROOT / "BENCHMARK_RESULTS.md"
+RESULTS_MD = REPO_ROOT / "docs" / "results" / "BENCHMARK_RESULTS.md"
 
 _ROW_RE = re.compile(
     r"^\|\s*(B\d+)\s*\|\s*([\w-]+)\s*\|.*?\|.*?\|.*?\|\s*([\d.]*)\s*\|\s*([\d.]*)\s*\|",
@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
 
     graded = [r for r in rows if r.graph is not None and r.vector is not None]
     print(f"\n{len(graded)}/{len(rows)} rows graded")
-    print(f"\nPhase 5.2 gate: {'PASS' if all_pass and len(graded) == len(rows) else 'INCOMPLETE / FAIL'}")
+    print(f"\nBenchmark gate: {'PASS' if all_pass and len(graded) == len(rows) else 'INCOMPLETE / FAIL'}")
     return 0 if all_pass else 1
 
 

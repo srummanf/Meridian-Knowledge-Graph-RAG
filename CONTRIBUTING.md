@@ -7,7 +7,7 @@ If you do want to open a pull request:
 
 ## Setup
 
-Follow [`SETUP.md`](./SETUP.md), then confirm the offline suite passes:
+Follow [`docs/SETUP.md`](./docs/SETUP.md), then confirm the offline suite passes:
 
 ```bash
 pytest -m "not llm and not neo4j and not pgvector"
@@ -16,7 +16,7 @@ ruff check .
 
 ## Conventions
 
-The project follows [`rules.md`](./rules.md). The short version:
+The project follows [`docs/spec/rules.md`](./docs/spec/rules.md). The short version:
 
 - Functions under 60 lines, modules under 300. Type hints and a docstring on
   every public function.

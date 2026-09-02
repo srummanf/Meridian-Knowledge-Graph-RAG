@@ -1,4 +1,4 @@
-# API Metrics (Phase 4.3)
+# API Metrics
 
 Snapshot of one warm run of `tests/test_api.py::test_api_gate`. Soft latency
 target: 3000 ms.

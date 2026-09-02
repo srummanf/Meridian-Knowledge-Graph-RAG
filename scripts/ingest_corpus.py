@@ -113,11 +113,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     if deferred and not real_failures:
         print(
-            f"\nPhase 1.4 gate: PROVISIONAL "
+            f"\nIngestion gate: PROVISIONAL "
             f"({len(results)}/{len(chunks)} chunks; {len(deferred)} deferred)"
         )
         return 1
-    print(f"\nPhase 1.4 gate: {'PASS' if ok else 'CHECK'}")
+    print(f"\nIngestion gate: {'PASS' if ok else 'CHECK'}")
     return 0 if ok else 1
 
 

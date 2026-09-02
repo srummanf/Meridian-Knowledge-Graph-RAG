@@ -80,8 +80,8 @@ EMBED_MODEL=BAAI/bge-small-en-v1.5     # local, 384-dim
 ```
 meridian-kg-rag/
 ├── pyproject.toml  .env.example  docker-compose.yml
-├── README.md              # benchmark table on top (Phase 5 output)
-├── prd.md  architecture.md  rules.md  phases.md  claude.md
+├── README.md              # benchmark table on top
+├── (spec docs moved to docs/spec/, results to docs/results/)
 ├── data/                  # the Meridian corpus — see data/README.md
 │   ├── ONTOLOGY.md  SCHEMA.md  README.md
 │   ├── products/ services/ libraries/ databases/ cloud/
@@ -109,7 +109,7 @@ meridian-kg-rag/
 │   │   ├── synthesize.py    # node: cited answer
 │   │   └── validate.py      # node: citation check + one regeneration
 │   ├── api/                 # main.py  dependencies.py
-│   ├── baselines/           # vector_only.py  (Phase 5)
+│   ├── baselines/           # vector_only.py  (the benchmark control)
 │   └── utils/               # errors.py
 ├── scripts/                 # ingest_corpus.py  benchmark.py  eval_extraction.py
 ├── tests/
