@@ -313,7 +313,39 @@ traversal, not to a better prompt or better chunks.
 validator regen) does not fit one day's Groq quota — hence the incremental,
 resumable run file.
 
-### 5.2 Grade + analyse ⬜  ·  ### 5.3 Writeup ⬜
+### 5.2 Grade + analyse 🚧 (13/30 run, gate not met on the sample)
 
-`BENCHMARK_RESULTS.md` (manual scoring), `FINDINGS.md`, `SETUP.md` ✅, README
-benchmark table.
+| File | What it does |
+|------|--------------|
+| `BENCHMARK_RESULTS.md` | The 13-question run (all 1-hop, B09–B10, B17, B18, B24, B28) with **proposed** grades + a category reading table. |
+| `scripts/score_benchmark.py` | Parses the `G`/`V` columns back out, means per category, checks the gate (1-hop \|Δ\|≤0.05 · 2-hop Δ≥+0.15 · 3-hop Δ≥+0.30 · aggregation graph≥0.80 & vector≤0.20). |
+
+**Result — the graph did not beat vector-only on accuracy:**
+
+| Category | Graph | Vector | Δ | Gate met? |
+|----------|------:|-------:|--:|-----------|
+| 1-hop | 0.94 | 0.94 | 0.00 | yes (parity) |
+| 2-hop | 1.00 | 1.00 | 0.00 | no |
+| 3-hop | 0.75 | 0.75 | 0.00 | no |
+| aggregation | 1.00 | 1.00 | 0.00 | no |
+| refusal | 1.00 | 1.00 | — | — |
+
+Two structural causes (full analysis in `FINDINGS.md`):
+1. **The corpus pre-aggregates** — `databases/postgresql.md` lists its 5 consumers
+   and states the count; `libraries/fastapi.md` lists its consumers. Vector reads
+   the answer off one hub doc, so "2-hop" and "aggregation" never force a
+   traversal.
+2. **Template coverage is the ceiling** — B18 (`team→OWNS→service→CONSUMES→api→OWNED_BY→team`)
+   fits none of the six `GraphQueryPlan` shapes; the planner degraded to
+   `neighbors` with a hallucinated anchor and returned nothing.
+
+Graph still shows an edge on **citation granularity** (B10: per-service sources)
+and **refusal routing** (B28: declines before retrieval) — neither a scored
+accuracy win.
+
+### 5.3 Writeup 🚧
+
+`FINDINGS.md` (drafted — includes "when to reach for a graph", "why not
+`GraphCypherQAChain`", cost/latency honesty, productionisation) · `SETUP.md` ✅ ·
+README benchmark table ✅. Remaining: finalise once grades are confirmed and,
+optionally, run the other 17 questions.

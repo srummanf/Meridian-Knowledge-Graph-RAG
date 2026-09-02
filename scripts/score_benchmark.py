@@ -85,9 +85,9 @@ def check_gate(category: str, stats: dict) -> tuple[bool, str]:
     kind, threshold = GATES[category]
     g, v, d = stats["graph_mean"], stats["vector_mean"], stats["delta"]
     if kind == "parity":
-        return abs(d) <= threshold, f"|Δ|={abs(d):.2f} <= {threshold}"
+        return abs(d) <= threshold, f"|delta|={abs(d):.2f} <= {threshold}"
     if kind == "graph_ahead":
-        return d >= threshold, f"Δ={d:+.2f} >= {threshold}"
+        return d >= threshold, f"delta={d:+.2f} >= {threshold}"
     lo, hi = threshold
     return (g >= lo and v <= hi), f"graph={g:.2f}>={lo}, vector={v:.2f}<={hi}"
 
@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
 
     order = ["1-hop", "2-hop", "3-hop", "aggregation", "refusal"]
     print("\n=== benchmark scores ===")
-    print(f"{'category':<12} {'graph':>7} {'vector':>7} {'Δ':>7}  gate")
+    print(f"{'category':<12} {'graph':>7} {'vector':>7} {'delta':>7}  gate")
     all_pass = True
     for category in order:
         if category not in cats:

@@ -337,5 +337,17 @@
       "latency_ms": 3734.6,
       "est_tokens": 1010
     }
+  },
+  "B18": {
+    "question": "Which teams own a service that consumes an API owned by the Payments Team?",
+    "category": "3-hop",
+    "graph": {
+      "route_used": "GRAPH",
+      "answer": "The retrieved context does not contain enough information to answer this question.",
+      "citations": [],
+      "notes": [],
+      "latency_ms": 467384.8,
+      "est_tokens": 72
+    }
   }
 }

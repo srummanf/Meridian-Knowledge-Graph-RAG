@@ -1,24 +1,56 @@
 # Benchmark Results — Graph RAG vs. Vector-only
 
-Raw run: `tests/fixtures/benchmark_run.json`. Rubric: `data/benchmark/
-questions.md` (0 / 0.25 / 0.5 / 0.75 / 1.0). Fill `G` (graph) and `V`
-(vector) with a manual score, then run `python scripts/score_benchmark.py`.
+Raw run: `tests/fixtures/benchmark_run.json`. Rubric: `data/benchmark/questions.md`
+(0 / 0.25 / 0.5 / 0.75 / 1.0). Scores below are **proposed by comparison to the
+gold answer — review and adjust**, then `python scripts/score_benchmark.py`.
+
+**Partial run (13 of 30):** the full 30 × 2 does not fit one day of free-tier
+quota, and B18's plan call alone took 7.8 min under sustained rate-limiting. The
+sample covers all of 1-hop, a slice of 2-hop, and one each of 3-hop / aggregation
+/ refusal — enough to see the pattern.
 
 | ID | Cat | Question | Gold route | Graph route | G | V | Notes |
 |----|-----|----------|-----------|-------------|---|---|-------|
-| B01 | 1-hop | What is the Auth Service? | VECTOR | VECTOR |  |  |  |
-| B02 | 1-hop | What is Kafka used for at Meridian? | VECTOR | VECTOR |  |  |  |
-| B03 | 1-hop | Which language is the Ledger Service written in? | VECTOR | VECTOR |  |  |  |
-| B04 | 1-hop | What does CVE-2021-44228 (Log4Shell) do? | VECTOR | VECTOR |  |  |  |
-| B05 | 1-hop | What is mTLS and where is it used at Meridian? | VECTOR | VECTOR |  |  |  |
-| B06 | 1-hop | What database does the Fraud Service use as a feature store? | VECTOR | VECTOR |  |  |  |
-| B07 | 1-hop | Which team owns the Merchant Dashboard? | VECTOR | VECTOR |  |  |  |
-| B08 | 1-hop | What protocol does the Public REST API use? | VECTOR | VECTOR |  |  |  |
-| B09 | 2-hop | Which services use PostgreSQL? | GRAPH | GRAPH |  |  |  |
-| B10 | 2-hop | Which services depend on FastAPI? | GRAPH | GRAPH |  |  |  |
-| B17 | 3-hop | If Log4Shell is exploited, which Meridian products are affected? | GRAPH | GRAPH |  |  |  |
-| B24 | aggregation | How many services use PostgreSQL? | GRAPH | GRAPH |  |  |  |
-| B28 | refusal | Is PostgreSQL better than MySQL for Meridian? | REFUSE | REFUSE |  |  |  |
+| B01 | 1-hop | What is the Auth Service? | VECTOR | VECTOR | 1.0 | 1.0 | identical answers (graph routed VECTOR); verbose but correct |
+| B02 | 1-hop | What is Kafka used for at Meridian? | VECTOR | VECTOR | 1.0 | 1.0 | identical, correct |
+| B03 | 1-hop | Which language is the Ledger Service written in? | VECTOR | VECTOR | 0.75 | 0.75 | "Java" not "Java 17"; identical |
+| B04 | 1-hop | What does CVE-2021-44228 (Log4Shell) do? | VECTOR | VECTOR | 0.75 | 0.75 | omits affected version range; identical |
+| B05 | 1-hop | What is mTLS and where is it used at Meridian? | VECTOR | VECTOR | 1.0 | 1.0 | correct, names Auth/Ledger/User API |
+| B06 | 1-hop | What database does the Fraud Service use as a feature store? | VECTOR | VECTOR | 1.0 | 1.0 | "Elasticsearch" |
+| B07 | 1-hop | Which team owns the Merchant Dashboard? | VECTOR | VECTOR | 1.0 | 1.0 | "Growth Team" |
+| B08 | 1-hop | What protocol does the Public REST API use? | VECTOR | VECTOR | 1.0 | 1.0 | "REST" |
+| B09 | 2-hop | Which services use PostgreSQL? | GRAPH | GRAPH | 1.0 | 1.0 | both list the correct 5; **graph cites the CVE doc** (extraction quirk), vector cites postgresql.md |
+| B10 | 2-hop | Which services depend on FastAPI? | GRAPH | GRAPH | 1.0 | 1.0 | both correct 5; **graph has per-service citations**, vector cites fastapi.md |
+| B17 | 3-hop | If Log4Shell is exploited, which Meridian products are affected? | GRAPH | GRAPH | 0.75 | 0.75 | both name Payments Platform (correct) but also include Ledger Service (the intermediate hop, not a product) |
+| B18 | 3-hop | Which teams own a service that consumes an API owned by the Payments Team? | GRAPH | GRAPH | 0.0 |  | **graph failed** — planner hallucinated a `jwt` anchor, no template expresses a 3-hop chain; 7.8 min. Vector not run. |
+| B24 | aggregation | How many services use PostgreSQL? | GRAPH | GRAPH | 1.0 | 1.0 | both "5"; count is pre-stated in `databases/postgresql.md`, so vector doesn't need to aggregate |
+| B28 | refusal | Is PostgreSQL better than MySQL for Meridian? | REFUSE | REFUSE | 1.0 | 1.0 | graph REFUSEs at the router; vector retrieves then declines via the synthesis guard |
+
+## Reading
+
+| Category | Graph | Vector | Δ | Gate | Met? |
+|----------|------:|-------:|--:|------|------|
+| 1-hop (B01–B08) | 0.94 | 0.94 | 0.00 | \|Δ\| ≤ 0.05 | **yes** |
+| 2-hop (B09–B10) | 1.00 | 1.00 | 0.00 | Δ ≥ +0.15 | no |
+| 3-hop (B17; B18 unpaired) | 0.75 | 0.75 | 0.00 | Δ ≥ +0.30 | no |
+| aggregation (B24) | 1.00 | 1.00 | 0.00 | graph ≥ 0.80, vector ≤ 0.20 | no (vector = 1.00) |
+| refusal (B28) | 1.00 | 1.00 | — | — | — |
+
+**The Phase 5.2 gate is not met on this sample.** Two causes, both real and
+both worth writing up (see `FINDINGS.md`):
+
+1. **The corpus pre-aggregates.** `databases/postgresql.md` lists its five
+   consumers; `libraries/fastapi.md` lists its consumers; `databases/postgresql.md`
+   states the count "5". Vector retrieves one hub doc and reads the answer off it,
+   so "2-hop" and "aggregation" questions never actually force a traversal.
+2. **Template coverage is the graph's ceiling.** B18 needs
+   team→OWNS→service→CONSUMES→api→OWNED_BY→team. None of the six `GraphQueryPlan`
+   shapes express it; the planner degraded to `neighbors` with a hallucinated
+   anchor.
+
+Where the graph still shows an edge on this sample: **citation quality on B10**
+(per-service sources vs. one hub doc) and **refusal routing on B28** (declines
+before retrieving). Neither is a scored-accuracy win.
 
 ## Per-question detail
 
@@ -151,5 +183,12 @@ questions.md` (0 / 0.25 / 0.5 / 0.75 / 1.0). Fill `G` (graph) and `V`
   notes: ['refused: nothing retrieved for the question']
 
 **vector** (VECTOR, 3735 ms, ~1010 tok): The retrieved context does not contain enough information to answer this question.
+  citations: —
+
+### B18 (3-hop) — Which teams own a service that consumes an API owned by the Payments Team?
+**Gold:** The Data Team (Fraud Service and Reporting Service consume the Ledger API; Reporting also consumes the Billing API) and the Payments Team itself (Billing consumes the Ledger API). The Ledger API and Billing API are owned by the Payments Team.
+**Gold sources:** services/{fraud, teams/*.md
+
+**graph** (GRAPH, 467385 ms, ~72 tok): The retrieved context does not contain enough information to answer this question.
   citations: —
 

@@ -206,21 +206,25 @@ runs each through both systems, and writes `tests/fixtures/benchmark_run.json`
 + a grading skeleton to `BENCHMARK_RESULTS.md` (answer, route, latency, est.
 tokens, citations, notes per system). `tests/test_benchmark.py` (parser + scorer).
 
-### 5.2 Grade + analyse
-Manual grading in `BENCHMARK_RESULTS.md` (fill `G`/`V` columns, rubric
-0 / .25 / .5 / .75 / 1). `scripts/score_benchmark.py` reads them back, reports
-mean accuracy per category, checks the gate. **Gate:**
-- 1-hop: Graph within ±5% of vector.
-- 2-hop: Graph ≥ +15%.
-- 3-hop / multi-constraint: Graph ≥ +30%.
-- Aggregation: Graph ≥ 80%, vector ≈ 0%.
-- Reproducible from the script.
+### 5.2 Grade + analyse 🚧 — gate NOT met on the 13-question sample
+Grades (proposed) in `BENCHMARK_RESULTS.md`; `scripts/score_benchmark.py` means
+per category + gate check. **Gate targets:** 1-hop ±5% · 2-hop ≥ +15% · 3-hop
+≥ +30% · aggregation graph ≥ 80% & vector ≈ 0%.
+**Result:** 1-hop parity ✅; 2-hop / 3-hop / aggregation all **Δ = 0.00** — the
+graph did not beat vector-only. Causes: (1) the corpus pre-aggregates
+relationships (hub docs list their consumers + state counts), so vector answers
+nominal multi-hop from one doc; (2) B18's true 3-hop chain fits none of the six
+`GraphQueryPlan` templates → planner failed. Graph's real edge on the sample:
+citation granularity + refusal routing. Full analysis in `FINDINGS.md`.
+Deciding what to do (accept as finding / widen corpus / add a `chain` template)
+is a spec call — see `FINDINGS.md` "productionise".
 
-### 5.3 Writeup
-- `README.md`: benchmark table on top → architecture diagram → quick start.
-- `FINDINGS.md`: why vector-only fails at multi-hop; where graph wins/loses;
-  latency & cost honesty; *why not `GraphCypherQAChain`*; how you'd productionise.
-- `SETUP.md`: local dev.
+### 5.3 Writeup 🚧
+- `README.md`: benchmark table added at the top ✅.
+- `FINDINGS.md`: drafted ✅ — corpus pre-aggregation, template ceiling, where the
+  graph wins/loses, latency & cost honesty, *why not `GraphCypherQAChain`*,
+  productionisation.
+- `SETUP.md`: local dev ✅.
 
 **Files:** `src/baselines/vector_only.py`, `scripts/benchmark.py`,
 `BENCHMARK_RESULTS.md`, `README.md`, `FINDINGS.md`, `SETUP.md`
