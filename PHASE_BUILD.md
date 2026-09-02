@@ -121,9 +121,41 @@ entities / 202 relationships** (targets 45–65 / 140–200).
 
 ---
 
-## Phase 2 — Vector index ⬜
+## Phase 2 — Vector index
 
-`src/ingest/load_vector.py`, `tests/fixtures/vector_eval.json`.
+### 2.1 Embed + store ✅
+
+Goal: every chunk embedded locally and stored in pgvector, keyed on `chunk_id`,
+with metadata linking it back to the graph.
+
+| File | What it does |
+|------|--------------|
+| `src/ingest/load_vector.py` | `vector_store()` — the one `PGVector` handle (collection `meridian_chunks`, cosine, 384-dim, `use_jsonb`, exact scan — no HNSW). `entity_ids_by_chunk(results)` — `chunk_id → sorted resolved entity ids` (each raw entity run through `resolve_entity`, grouped by `source_chunk_id`, so the list is complete even for entities the graph merge re-attributed elsewhere). `load_vector(chunks, results)` — build one `Document` per chunk (`page_content` = chunk text, metadata `{chunk_id, document, entity_ids}`) and `add_documents(..., ids=[chunk_id])` so a re-run upserts, never duplicates. `--wipe` drops + recreates the collection. Embeddings are local (`bge-small`) → **no API call**. |
+| `scripts/ingest_corpus.py` | now also calls `load_vector(chunks, results, wipe_first=…)` after the graph load and prints `vectors: N chunks embedded`. |
+| `tests/test_load_vector.py` | 4 unit tests (entity-id grouping/resolution, document metadata shaping) + 2 `@pytest.mark.pgvector` gate tests (real embed + upsert idempotency, similarity search returns the right chunk, 384-dim). |
+
+**Concept:** vector search covers **all 42 chunks** even though the graph only
+has 39 — the 3 deferred chunks are embedded with `entity_ids: []`. The vector
+store and graph share `chunk_id` as the join key for hybrid retrieval (Phase 3).
+`entity_ids` is computed from the *raw* per-chunk extractions, not the merged
+entities, so it lists every node a chunk mentions.
+
+### 2.2 Recall sanity check ✅
+
+Goal: confirm vector retrieval actually surfaces the right chunk before the
+pipeline depends on it.
+
+| File | What it does |
+|------|--------------|
+| `tests/fixtures/vector_eval.json` | 12 `(question → gold_chunk_id)` pairs — definitional questions whose answer lives in exactly one chunk; 8 are lifted from `data/benchmark/questions.md` (the VECTOR-route B01–B08), 4 are extra. Carries the gate (`recall_at_5_gate: 0.9`) and `k`. |
+| `scripts/eval_vector.py` | Builds the corpus into a **scratch** collection `meridian_eval` (chunks only — no LLM, no graph), runs each question through `similarity_search`, prints recall@1/3/5 and per-question rank, drops the scratch collection. `PASS` if recall@5 ≥ gate. Also holds the "why no ANN index" write-up (module docstring). |
+| `scripts/__init__.py` | makes `scripts/` importable so tests reuse `eval_vector` logic. |
+| `src/ingest/load_vector.py` | `vector_store(collection=…)` gained a param so the eval never touches the real `meridian_chunks`. |
+| `tests/test_vector_recall.py` | 1 unit test (every fixture gold id is a real chunk — guards against drift) + 1 `@pytest.mark.pgvector` gate test (recall@5 ≥ 0.9). |
+
+**Result:** **recall@1 = 1.00** over all 12 questions. Expected — with ~42
+distinct-topic vectors and an *exact* scan, the nearest chunk is the right chunk.
+This is the evidence that an ANN index would be pure downside here.
 
 ## Phase 3 — Routing & retrieval ⬜
 

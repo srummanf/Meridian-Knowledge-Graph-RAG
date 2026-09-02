@@ -1,10 +1,10 @@
-"""End-to-end ingestion: corpus -> chunks -> extract -> resolve -> Neo4j.
+"""End-to-end ingestion: corpus -> chunks -> extract -> resolve -> Neo4j + pgvector.
 
-    python scripts/ingest_corpus.py           # MERGE (idempotent; safe to re-run)
-    python scripts/ingest_corpus.py --wipe    # clear Neo4j first, then rebuild
+    python scripts/ingest_corpus.py           # upsert (idempotent; safe to re-run)
+    python scripts/ingest_corpus.py --wipe    # clear both stores first, then rebuild
 
-Extraction is cached (``cache/llm.db``), so re-runs are fast and free. Phase 2
-extends this script to also populate pgvector.
+Extraction is cached (``cache/llm.db``), so re-runs are fast and free. Embeddings
+are local (``bge-small``), so the vector load never touches an API.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from src.graph.queries import (
 from src.ingest.chunk import chunk_corpus
 from src.ingest.extract import extract_corpus
 from src.ingest.load_graph import load_graph
+from src.ingest.load_vector import load_vector
 from src.ingest.resolve import resolve
 from src.logging_config import configure_logging, get_logger
 from src.utils.errors import LLMUnavailableError
@@ -45,7 +46,11 @@ DEFERRED_CHUNKS = {
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--wipe", action="store_true", help="clear Neo4j before loading")
+    parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help="clear Neo4j + the pgvector collection before loading",
+    )
     args = parser.parse_args(argv)
 
     started = time.perf_counter()
@@ -74,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
 
     counts = load_graph(entities, relationships, wipe_first=args.wipe)
 
+    vcounts = load_vector(chunks, results, wipe_first=args.wipe)
+    log.info("embedded %d chunks into pgvector", vcounts["chunks_embedded"])
+
     client = graph_client()
     elapsed = time.perf_counter() - started
 
@@ -87,6 +95,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"entities: {counts['entities']}   relationships: {counts['relationships']}")
     print(f"edges missing evidence/source: {counts['relationships_missing_evidence']}")
     print(f"edges skipped (bad endpoint): {counts['skipped']}")
+    print(
+        f"vectors: {vcounts['chunks_embedded']} chunks embedded "
+        f"({vcounts['dim']}-dim, local)"
+    )
     print(f"elapsed: {elapsed / 60:.1f} min\n")
 
     print("entities by type:")

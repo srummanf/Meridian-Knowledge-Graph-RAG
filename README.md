@@ -4,8 +4,10 @@ Hybrid **knowledge-graph + vector RAG** over a 37-document technical corpus
 (*Meridian*, a fictional fintech). Routes each question to graph traversal or
 vector search, merges the results, and answers with validated citations.
 
-> **Status:** in development — Phase 1.3 complete. The benchmark table (Graph RAG
-> vs. vector-only, by hop count) lands at the top of this file in Phase 5.
+> **Status:** in development — Phase 2 complete. Graph (39/42 chunks) + vector
+> index (42 chunks, recall@1 = 1.00) both built and idempotent; Phase 3 (routing
+> & retrieval) next. The benchmark table (Graph RAG vs. vector-only, by hop
+> count) lands at the top of this file in Phase 5.
 
 ## Progress
 
@@ -17,7 +19,8 @@ vector search, merges the results, and answers with validated citations.
 | 1.3 — Extraction | ✅ | `src/ingest/extract.py` + `src/utils/errors.py` — LLM → validated `ExtractionResult` (24 tests) |
 | 1.4 — Graph load + resolution | 🚧 | 39/42 chunks in Neo4j (43 entities, 202 rels), idempotent & $0 to rebuild; 3 oversized chunks deferred to a quota-reset top-up |
 | 1.5 — Extraction eval | ⬜ | F1 ≥ 0.85 / 0.75 |
-| 2 — Vector index | ⬜ | pgvector populated |
+| 2.1 — Embed + store | ✅ | `src/ingest/load_vector.py` — 42 chunks → local `bge-small` (384-dim) → pgvector, keyed on `chunk_id` (6 tests) |
+| 2.2 — Recall check | ✅ | `scripts/eval_vector.py` + `vector_eval.json` — recall@1 = 1.00 over 12 questions (2 tests) |
 | 3 — Routing & retrieval | ⬜ | LangGraph pipeline |
 | 4 — Synthesis & API | ⬜ | `POST /query` end to end |
 | 5 — Benchmark & writeup | ⬜ | benchmark table, `FINDINGS.md` |

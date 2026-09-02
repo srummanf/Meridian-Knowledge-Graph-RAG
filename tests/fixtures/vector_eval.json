@@ -1,0 +1,19 @@
+{
+  "description": "Phase 2.2 recall sanity check: definitional questions whose answer lives in exactly one chunk. Gate: recall@5 >= 0.9 (expect ~1.0 over ~42 vectors). benchmark_ref ties a pair to data/benchmark/questions.md where applicable.",
+  "recall_at_5_gate": 0.9,
+  "k": 5,
+  "pairs": [
+    {"question": "What is the Auth Service?", "gold_chunk_id": "services/auth-service.md", "benchmark_ref": "B01"},
+    {"question": "What is Kafka used for at Meridian?", "gold_chunk_id": "databases/kafka.md", "benchmark_ref": "B02"},
+    {"question": "Which programming language is the Ledger Service written in?", "gold_chunk_id": "services/ledger-service.md#overview", "benchmark_ref": "B03"},
+    {"question": "What does CVE-2021-44228 (Log4Shell) do?", "gold_chunk_id": "vulnerabilities/cve-2021-44228-log4shell.md", "benchmark_ref": "B04"},
+    {"question": "What is mTLS and where is it used at Meridian?", "gold_chunk_id": "security/mtls.md", "benchmark_ref": "B05"},
+    {"question": "What does the Fraud Service use as a feature store?", "gold_chunk_id": "services/fraud-service.md", "benchmark_ref": "B06"},
+    {"question": "Which team owns the Merchant Dashboard?", "gold_chunk_id": "products/merchant-dashboard.md", "benchmark_ref": "B07"},
+    {"question": "What protocol does the Public REST API use?", "gold_chunk_id": "protocols/rest.md", "benchmark_ref": "B08"},
+    {"question": "What is a JSON Web Token and how does Meridian use it?", "gold_chunk_id": "security/jwt.md"},
+    {"question": "What is Redis used for at Meridian?", "gold_chunk_id": "databases/redis.md"},
+    {"question": "What is the Celery task queue used for?", "gold_chunk_id": "libraries/celery.md"},
+    {"question": "What is CVE-2024-0985 in PostgreSQL?", "gold_chunk_id": "vulnerabilities/cve-2024-0985-postgresql.md"}
+  ]
+}

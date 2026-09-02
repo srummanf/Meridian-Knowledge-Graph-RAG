@@ -103,16 +103,23 @@ prompt + re-run if lower. **Files:** `EXTRACTION_METRICS.md`.
 
 ## Phase 2 — Vector index (2 days)
 
-### 2.1 Embed + store
+### 2.1 Embed + store ✅ (built)
 `src/ingest/load_vector.py` — `HuggingFaceEmbeddings("BAAI/bge-small-en-v1.5")`
-(local), `PGVector.add_documents` with metadata `{chunk_id, document,
-entity_ids}`. Extend `ingest_corpus.py`. **Gate:** all chunks embedded (384-dim);
-a `chunk_id` resolves in both Neo4j and pgvector.
+(local), `PGVector.add_documents(ids=[chunk_id])` (upsert → idempotent) with
+metadata `{chunk_id, document, entity_ids}`, collection `meridian_chunks`, cosine,
+384-dim, no ANN index. Wired into `ingest_corpus.py`. **Gate met:** all **42**
+chunks embedded (384-dim, verified in `langchain_pg_embedding`); `chunk_id` is the
+shared key across Neo4j + pgvector; re-run changes nothing.
+`tests/test_load_vector.py` (4 unit + 2 `@pytest.mark.pgvector`).
 
-### 2.2 Recall sanity check
-`tests/fixtures/vector_eval.json` — ~10 `(question → gold chunk_id)` pairs.
-`PGVector.similarity_search`, measure recall@5. **Gate:** recall@5 ≥ 0.9
-(expect ≈ 1.0). One paragraph on why ANN indexing is unnecessary here.
+### 2.2 Recall sanity check ✅
+`tests/fixtures/vector_eval.json` — 12 `(question → gold chunk_id)` pairs (8 from
+the benchmark's VECTOR set). `scripts/eval_vector.py` builds a scratch collection
+and measures recall@1/3/5; `tests/test_vector_recall.py` is the gate.
+**Gate met:** recall@1 = **1.00** (n=12), well over the 0.9 recall@5 bar. The
+"why no ANN index" paragraph lives in `scripts/eval_vector.py`'s docstring:
+~42 vectors, exact scan is sub-ms and recall-1.0 by construction; HNSW/IVFFlat
+only pay off 3–5 orders of magnitude larger and would add approximation error.
 
 ---
 
