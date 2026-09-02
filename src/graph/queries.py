@@ -81,5 +81,105 @@ RELATIONSHIP_TYPE_BREAKDOWN = (
     "MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS n ORDER BY n DESC"
 )
 
-# Read templates for retrieval (entity_by_name, neighbors_1hop, ...) arrive in
-# Phase 3.2.
+# --------------------------------------------------------------------------- #
+# Read templates (Phase 3.2) — the graph retriever's entire Cypher surface.
+#
+# These are generic: the relationship type is a ``WHERE type(r) = $rel`` filter,
+# never interpolated, so one template serves every edge type. Anchors are
+# matched on the unique ``id`` (works for an ``:Entity`` or a ``:Concern``
+# HANDLES target). ``$rel`` / ``$neighbor_type`` / ``$direction`` may be null to
+# mean "no filter" / "either way". The LLM never sees or writes Cypher — it only
+# fills a :class:`~src.pipeline.retrieve_graph.GraphQueryPlan`, which the
+# retriever maps to one of these.
+# --------------------------------------------------------------------------- #
+
+RESOLVE_ENTITY = """
+MATCH (e:Entity)
+WHERE toLower(e.canonical_name) = toLower($name)
+   OR any(a IN coalesce(e.aliases, []) WHERE toLower(a) = toLower($name))
+RETURN e.id AS id, e.canonical_name AS name, e.type AS type
+ORDER BY size(e.canonical_name)
+LIMIT 1
+"""
+
+RESOLVE_ENTITY_FUZZY = """
+MATCH (e:Entity)
+WHERE toLower(e.canonical_name) CONTAINS toLower($name)
+   OR toLower($name) CONTAINS toLower(e.canonical_name)
+RETURN e.id AS id, e.canonical_name AS name, e.type AS type
+ORDER BY size(e.canonical_name)
+LIMIT 1
+"""
+
+_DIRECTION_CLAUSE = """
+  AND ($direction IS NULL OR $direction = 'either'
+       OR ($direction = 'from_anchor' AND startNode(r) = anchor)
+       OR ($direction = 'to_anchor'   AND endNode(r)   = anchor))
+"""
+
+NEIGHBORS = f"""
+MATCH (anchor {{id: $anchor_id}})-[r]-(n)
+WHERE ($rel IS NULL OR type(r) = $rel){_DIRECTION_CLAUSE}
+  AND ($neighbor_type IS NULL OR n.type = $neighbor_type)
+RETURN DISTINCT
+  type(r) AS rel,
+  CASE WHEN startNode(r) = anchor THEN 'from_anchor' ELSE 'to_anchor' END AS direction,
+  anchor.canonical_name AS anchor_name,
+  coalesce(n.canonical_name, n.name) AS name,
+  n.id AS id, n.type AS type,
+  r.source_chunk_id AS source_chunk_id, r.evidence AS evidence
+ORDER BY rel, name
+"""
+
+COUNT_NEIGHBORS = f"""
+MATCH (anchor {{id: $anchor_id}})-[r]-(n)
+WHERE ($rel IS NULL OR type(r) = $rel){_DIRECTION_CLAUSE}
+  AND ($neighbor_type IS NULL OR n.type = $neighbor_type)
+RETURN count(DISTINCT n) AS count
+"""
+
+TWO_CONSTRAINT = """
+MATCH (n:Entity)-[r1]-(a1 {id: $anchor_id})
+WHERE $rel IS NULL OR type(r1) = $rel
+MATCH (n)-[r2]-(a2 {id: $second_anchor_id})
+WHERE $second_rel IS NULL OR type(r2) = $second_rel
+RETURN DISTINCT
+  n.id AS id, n.canonical_name AS name, n.type AS type,
+  type(r1) AS rel1, coalesce(a1.canonical_name, a1.name) AS anchor1,
+  type(r2) AS rel2, coalesce(a2.canonical_name, a2.name) AS anchor2,
+  r1.source_chunk_id AS source_chunk_id, r1.evidence AS evidence
+ORDER BY name
+"""
+
+PATH_BETWEEN = """
+MATCH (a {id: $anchor_id}), (b {id: $second_anchor_id})
+MATCH p = shortestPath((a)-[*..5]-(b))
+UNWIND relationships(p) AS r
+RETURN
+  type(r) AS rel,
+  startNode(r).canonical_name AS source,
+  coalesce(endNode(r).canonical_name, endNode(r).name) AS target,
+  r.source_chunk_id AS source_chunk_id, r.evidence AS evidence
+"""
+
+BLAST_RADIUS = """
+MATCH (v {id: $anchor_id})-[a:AFFECTS]->(lib:Entity)
+OPTIONAL MATCH (lib)<-[:DEPENDS_ON*1..3]-(svc:Entity)
+WITH lib, a, svc WHERE svc IS NULL OR svc.type = 'Service'
+OPTIONAL MATCH (svc)-[:PART_OF]->(prod:Entity)
+RETURN
+  lib.canonical_name AS affected_library,
+  a.affected_versions AS affected_versions,
+  collect(DISTINCT svc.canonical_name) AS services,
+  collect(DISTINCT prod.canonical_name) AS products,
+  a.source_chunk_id AS source_chunk_id, a.evidence AS evidence
+"""
+
+READ_TEMPLATES: dict[str, str] = {
+    "neighbors": NEIGHBORS,
+    "count": COUNT_NEIGHBORS,
+    "two_constraint": TWO_CONSTRAINT,
+    "path": PATH_BETWEEN,
+    "blast_radius": BLAST_RADIUS,
+    "lookup": NEIGHBORS,  # 1-hop neighbourhood, no filters
+}

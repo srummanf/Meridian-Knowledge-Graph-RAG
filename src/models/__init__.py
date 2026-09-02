@@ -6,7 +6,9 @@ come from ``architecture.md`` §4.
 
 from src.models.answer import (
     Citation,
+    GraphFact,
     GroundedAnswer,
+    MergedContext,
     Passage,
     RoutingUsed,
     SourceType,
@@ -34,7 +36,9 @@ __all__ = [
     "Entity",
     "EntityType",
     "ExtractionResult",
+    "GraphFact",
     "GroundedAnswer",
+    "MergedContext",
     "Passage",
     "Relationship",
     "RelationType",

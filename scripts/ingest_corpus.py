@@ -33,15 +33,11 @@ log = get_logger("ingest")
 ENTITY_TARGET = range(45, 66)          # ONTOLOGY §6
 RELATIONSHIP_TARGET = range(140, 201)
 
-# Chunks parked for a later top-up run. These three exceed Groq's free-tier
-# per-request token ceiling AND lost their Gemini cache during 2026-09-02
-# debugging, when both free-tier daily quotas were exhausted. Clear this set and
-# re-run `scripts/backfill_extract.py` once the quotas reset, then `--wipe`.
-DEFERRED_CHUNKS = {
-    "services/user-service.md#overview",
-    "services/user-service.md#security",
-    "teams/data-team.md",
-}
+# Chunks parked for a later top-up run. Previously held the three oversized
+# user-service / data-team chunks; their cached extractions were repaired
+# in place on 2026-09-02 (see scripts/repair_cache_rows.py) and folded back in,
+# so the set is now empty. Add a chunk id here to skip it without aborting a run.
+DEFERRED_CHUNKS: set[str] = set()
 
 
 def main(argv: list[str] | None = None) -> int:

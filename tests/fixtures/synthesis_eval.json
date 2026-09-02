@@ -1,0 +1,35 @@
+{
+  "description": "Phase 4.1 gate. Each question runs through the full pipeline (route -> retrieve -> merge) then synthesize. Pass = non-empty answer that is not the no-answer sentinel, at least one citation, every citation.chunk_id non-empty AND in the retrieved set, and every string in must_mention present in the answer (case-insensitive). Questions span the VECTOR / GRAPH-neighbors / GRAPH-count / GRAPH-blast-radius / GRAPH-two-hop shapes.",
+  "questions": [
+    {
+      "question": "What is the Auth Service?",
+      "benchmark_ref": "B01",
+      "expected_route": "VECTOR",
+      "must_mention": ["identity", "JWT"]
+    },
+    {
+      "question": "Which services use PostgreSQL?",
+      "benchmark_ref": "B09",
+      "expected_route": "GRAPH",
+      "must_mention": ["Auth Service", "User Service", "Billing Service", "Ledger Service", "Reporting Service"]
+    },
+    {
+      "question": "How many services use PostgreSQL?",
+      "benchmark_ref": "B24",
+      "expected_route": "GRAPH",
+      "must_mention": ["5"]
+    },
+    {
+      "question": "If Log4Shell is exploited, which Meridian products are affected?",
+      "benchmark_ref": "B17",
+      "expected_route": "GRAPH",
+      "must_mention": ["Payments Platform"]
+    },
+    {
+      "question": "What is the Payments Platform made of?",
+      "benchmark_ref": "B16",
+      "expected_route": "GRAPH",
+      "must_mention": ["Billing Service", "Ledger Service", "Fraud Service"]
+    }
+  ]
+}

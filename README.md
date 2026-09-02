@@ -4,10 +4,12 @@ Hybrid **knowledge-graph + vector RAG** over a 37-document technical corpus
 (*Meridian*, a fictional fintech). Routes each question to graph traversal or
 vector search, merges the results, and answers with validated citations.
 
-> **Status:** in development — Phase 2 complete. Graph (39/42 chunks) + vector
-> index (42 chunks, recall@1 = 1.00) both built and idempotent; Phase 3 (routing
-> & retrieval) next. The benchmark table (Graph RAG vs. vector-only, by hop
-> count) lands at the top of this file in Phase 5.
+> **Status:** in development — Phases 0–4 done. `POST /query` runs end to end:
+> route → graph/vector retrieval → merge → cited synthesis → citation validation,
+> with 100% citation validity on the sample. Full corpus loaded: 42/42 chunks →
+> 43 entities / 222 relationships in Neo4j, 42 vectors in pgvector. Router 95.2%;
+> vector recall@1 = 1.00. Next: Phase 5 — the benchmark table (Graph RAG vs.
+> vector-only, by hop count) lands at the top of this file.
 
 ## Progress
 
@@ -17,12 +19,17 @@ vector search, merges the results, and answers with validated citations.
 | 1.1 — Models | ✅ | `src/models/*` — typed vocabulary & pipeline shapes (35 tests) |
 | 1.2 — Chunking | ✅ | `src/ingest/chunk.py` — 37 docs → 42 chunks (15 tests) |
 | 1.3 — Extraction | ✅ | `src/ingest/extract.py` + `src/utils/errors.py` — LLM → validated `ExtractionResult` (24 tests) |
-| 1.4 — Graph load + resolution | 🚧 | 39/42 chunks in Neo4j (43 entities, 202 rels), idempotent & $0 to rebuild; 3 oversized chunks deferred to a quota-reset top-up |
+| 1.4 — Graph load + resolution | ✅ | 42/42 chunks in Neo4j (43 entities, 222 rels), idempotent & $0 to rebuild from cache |
 | 1.5 — Extraction eval | ⬜ | F1 ≥ 0.85 / 0.75 |
 | 2.1 — Embed + store | ✅ | `src/ingest/load_vector.py` — 42 chunks → local `bge-small` (384-dim) → pgvector, keyed on `chunk_id` (6 tests) |
 | 2.2 — Recall check | ✅ | `scripts/eval_vector.py` + `vector_eval.json` — recall@1 = 1.00 over 12 questions (2 tests) |
-| 3 — Routing & retrieval | ⬜ | LangGraph pipeline |
-| 4 — Synthesis & API | ⬜ | `POST /query` end to end |
+| 3.1 — Router | ✅ | `src/pipeline/router.py` — question → VECTOR/GRAPH/HYBRID/REFUSE, 95.2% on 21 labelled (`ROUTING_METRICS.md`, 9 tests) |
+| 3.2 — Graph retriever | ✅ | `src/pipeline/retrieve_graph.py` + 7 read templates in `src/graph/queries.py` — plan LLM → resolve → Cypher → sentences; B09/B14/B16/B17/B24 exact, ≤56 ms (11 tests) |
+| 3.3 — Vector retriever | ✅ | `src/pipeline/retrieve_vector.py` — exact cosine top-k; B01–B08 all rank 1 (`scripts/eval_vector_retrieval.py`, 7 tests) |
+| 3.4 — Merge + pipeline | ✅ | `src/pipeline/{merge,graph}.py` — dedupe + labelled context; LangGraph `StateGraph` with graph→vector→REFUSE fallbacks (21 tests) |
+| 4.1 — Synthesize | ✅ | `src/pipeline/synthesize.py` — labelled context → cited answer, citation per claim; 5/5 sample answers coherent + fully cited (4 tests) |
+| 4.2 — Validate citations | ✅ | `src/pipeline/validate.py` + `compile_answer_pipeline` — every cited chunk_id ∈ retrieved set, one allow-listed regeneration; injected bad citation caught (8 tests) |
+| 4.3 — API + end to end | ✅ | `src/api/{main,schemas,dependencies}.py` — `POST /query` (200 / 422 out-of-scope / 400 / 503), `GET /health`; one integration test per route (`API_METRICS.md`, 9 tests) |
 | 5 — Benchmark & writeup | ⬜ | benchmark table, `FINDINGS.md` |
 
 See [`PHASE_BUILD.md`](./PHASE_BUILD.md) for a file-by-file map of what each

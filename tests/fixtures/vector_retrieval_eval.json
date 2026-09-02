@@ -1,0 +1,47 @@
+{
+  "description": "Phase 3.3 gate. Each benchmark VECTOR question (B01-B08 from data/benchmark/questions.md) must surface an acceptable source chunk within the top-k results of retrieve_vector. 'gold_chunks' lists every chunk that legitimately answers the question (a doc that split contributes more than one; some questions are answered by either of two docs). Pass = at least one gold chunk in the top rank_within.",
+  "rank_within": 3,
+  "k": 5,
+  "questions": [
+    {
+      "question": "What is the Auth Service?",
+      "benchmark_ref": "B01",
+      "gold_chunks": ["services/auth-service.md"]
+    },
+    {
+      "question": "What is Kafka used for at Meridian?",
+      "benchmark_ref": "B02",
+      "gold_chunks": ["databases/kafka.md"]
+    },
+    {
+      "question": "Which language is the Ledger Service written in?",
+      "benchmark_ref": "B03",
+      "gold_chunks": ["services/ledger-service.md#overview", "services/ledger-service.md#apis", "libraries/java.md"]
+    },
+    {
+      "question": "What does CVE-2021-44228 (Log4Shell) do?",
+      "benchmark_ref": "B04",
+      "gold_chunks": ["vulnerabilities/cve-2021-44228-log4shell.md"]
+    },
+    {
+      "question": "What is mTLS and where is it used at Meridian?",
+      "benchmark_ref": "B05",
+      "gold_chunks": ["security/mtls.md"]
+    },
+    {
+      "question": "What database does the Fraud Service use as a feature store?",
+      "benchmark_ref": "B06",
+      "gold_chunks": ["services/fraud-service.md"]
+    },
+    {
+      "question": "Which team owns the Merchant Dashboard?",
+      "benchmark_ref": "B07",
+      "gold_chunks": ["products/merchant-dashboard.md", "teams/growth-team.md"]
+    },
+    {
+      "question": "What protocol does the Public REST API use?",
+      "benchmark_ref": "B08",
+      "gold_chunks": ["services/api-gateway.md#overview", "services/api-gateway.md#deployment", "protocols/rest.md"]
+    }
+  ]
+}

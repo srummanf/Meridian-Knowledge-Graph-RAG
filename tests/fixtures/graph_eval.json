@@ -1,0 +1,36 @@
+{
+  "description": "Phase 3.2 gate. For each question the graph retriever must return every gold node (recall 1.0). 'exact' means the result must equal the gold set. 'extra_ok' lists nodes the built corpus legitimately adds beyond the benchmark's hand-written gold (e.g. the API Gateway genuinely consumes the Ledger API per services/api-gateway.md). Gate questions are B09/B14/B16/B17/B24 from data/benchmark/questions.md.",
+  "max_query_ms": 200,
+  "questions": [
+    {
+      "question": "Which services use PostgreSQL?",
+      "benchmark_ref": "B09",
+      "gold_nodes": ["Auth Service", "User Service", "Billing Service", "Ledger Service", "Reporting Service"],
+      "exact": true
+    },
+    {
+      "question": "Which services consume the Ledger API?",
+      "benchmark_ref": "B14",
+      "gold_nodes": ["Billing Service", "Fraud Service", "Reporting Service"],
+      "extra_ok": ["API Gateway"]
+    },
+    {
+      "question": "What is the Payments Platform made of?",
+      "benchmark_ref": "B16",
+      "gold_nodes": ["Billing Service", "Ledger Service", "Fraud Service"],
+      "exact": true
+    },
+    {
+      "question": "If Log4Shell is exploited, which Meridian products are affected?",
+      "benchmark_ref": "B17",
+      "gold_nodes": ["Payments Platform"],
+      "extra_ok": ["Ledger Service"]
+    },
+    {
+      "question": "How many services use PostgreSQL?",
+      "benchmark_ref": "B24",
+      "gold_nodes": ["Auth Service", "User Service", "Billing Service", "Ledger Service", "Reporting Service"],
+      "expected_count": 5
+    }
+  ]
+}

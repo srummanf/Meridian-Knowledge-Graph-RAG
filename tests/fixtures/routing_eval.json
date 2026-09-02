@@ -1,0 +1,29 @@
+{
+  "description": "Phase 3.1 router gate. 21 questions hand-labelled with the route they should take. None of these appears in router.py's few-shot block. VECTOR/GRAPH gold matches data/benchmark/questions.md where a benchmark_ref is given; REFUSE items are fresh. Gate: accuracy >= 0.90. A HYBRID prediction where gold is VECTOR/GRAPH counts as wrong (tracked separately in the confusion matrix).",
+  "accuracy_gate": 0.90,
+  "questions": [
+    {"question": "Which programming language is the Ledger Service written in?", "gold_route": "VECTOR", "benchmark_ref": "B03"},
+    {"question": "What is mTLS and where is it used at Meridian?", "gold_route": "VECTOR", "benchmark_ref": "B05"},
+    {"question": "What does the Fraud Service use as a feature store?", "gold_route": "VECTOR", "benchmark_ref": "B06"},
+    {"question": "Which team owns the Merchant Dashboard?", "gold_route": "VECTOR", "benchmark_ref": "B07"},
+    {"question": "What protocol does the Public REST API use?", "gold_route": "VECTOR", "benchmark_ref": "B08"},
+    {"question": "What is OAuth2 and how does Meridian use it?", "gold_route": "VECTOR"},
+
+    {"question": "Which services depend on FastAPI?", "gold_route": "GRAPH", "benchmark_ref": "B10"},
+    {"question": "What does the Billing Service depend on?", "gold_route": "GRAPH", "benchmark_ref": "B11"},
+    {"question": "Which services does the Growth Team own?", "gold_route": "GRAPH", "benchmark_ref": "B12"},
+    {"question": "Which APIs are secured by mTLS?", "gold_route": "GRAPH", "benchmark_ref": "B13"},
+    {"question": "Which services consume the Ledger API?", "gold_route": "GRAPH", "benchmark_ref": "B14"},
+    {"question": "Which services handle PII?", "gold_route": "GRAPH", "benchmark_ref": "B15"},
+    {"question": "What is the Payments Platform made of?", "gold_route": "GRAPH", "benchmark_ref": "B16"},
+    {"question": "Which services both handle PCI cardholder data and are deployed on AWS EKS?", "gold_route": "GRAPH", "benchmark_ref": "B20"},
+    {"question": "Which databases used by Payments Platform services run self-managed on EKS rather than a managed AWS service?", "gold_route": "GRAPH", "benchmark_ref": "B22"},
+    {"question": "How many services use PostgreSQL?", "gold_route": "GRAPH", "benchmark_ref": "B24"},
+    {"question": "How many distinct services does the Reporting Service depend on or consume APIs from?", "gold_route": "GRAPH", "benchmark_ref": "B27"},
+
+    {"question": "Which database should Meridian adopt for its next new service?", "gold_route": "REFUSE"},
+    {"question": "Is Meridian's microservice architecture well designed?", "gold_route": "REFUSE"},
+    {"question": "What is the annual cloud spend for the Payments Platform?", "gold_route": "REFUSE"},
+    {"question": "Will the Fraud Service scale to ten times its current traffic?", "gold_route": "REFUSE"}
+  ]
+}
