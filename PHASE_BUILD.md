@@ -77,7 +77,7 @@ chunk so citations can't be hallucinated. `config.py` change: Groq needs
 `with_structured_output(..., method="json_schema")` — `gpt-oss` rejects the
 default tool-calling method.
 
-### 1.4 Graph load + resolution 🚧 (code complete; end-to-end ingest pending API quota)
+### 1.4 Graph load + resolution 🚧 (39/42 chunks live; 3 deferred to a top-up run)
 
 Goal: resolve the per-chunk extractions into one clean graph and MERGE it into Neo4j.
 
@@ -87,7 +87,8 @@ Goal: resolve the per-chunk extractions into one clean graph and MERGE it into N
 | `src/graph/queries.py` | Every Cypher string. `SCHEMA_STATEMENTS` (id constraints + name/type indexes), `WIPE`, 11 `ENTITY_TEMPLATES` (one per type — Cypher can't parameterise a label), 12 `RELATIONSHIP_TEMPLATES` (one per type, keyed on `source_chunk_id`; `HANDLES` targets a `:Concern` node), and count queries for gate checks. Templates are built once from the enums — the only place a type name is formatted into a string. |
 | `src/graph/client.py` | `graph_client()` — the shared `Neo4jGraph` (one driver/process). `ensure_schema()`, `wipe()`. |
 | `src/ingest/load_graph.py` | `load_graph(entities, relationships)` — MERGE each entity (its `properties` map is JSON-serialised because Neo4j properties must be primitive; `version` hoisted out), then each relationship via its template. Returns live DB counts. All MERGE → re-running changes nothing. |
-| `scripts/ingest_corpus.py` | `chunk_corpus() → extract_corpus() → resolve() → load_graph()`. `--wipe` for a clean rebuild. Prints the summary + type breakdowns and checks the gate ranges. Pauses cleanly (exit 2) if both LLM providers are rate-limited — the cache keeps progress. |
+| `scripts/ingest_corpus.py` | `chunk_corpus() → extract_corpus(skip=DEFERRED_CHUNKS) → resolve() → load_graph()`. `--wipe` for a clean rebuild. Prints the summary + type breakdowns and checks the gate ranges. `DEFERRED_CHUNKS` = 3 chunk IDs parked for a later top-up (see below); they're skipped, not extracted. Still pauses cleanly (exit 2) if a *non-deferred* chunk finds both providers rate-limited. |
+| `scripts/backfill_extract.py` | One-off: extract the oversized chunks through **Gemini only** and write the result into `cache/llm.db` as the *first-attempt* Google cache row, so a normal Groq-primary ingest cache-hits the Google fallback leg for them. Never deletes a row; only writes a validated `ExtractionResult`. Run it once after quotas reset, then clear `DEFERRED_CHUNKS` and `--wipe`. |
 | `tests/test_resolve.py` (39) · `tests/test_queries.py` (8) · `tests/test_load_graph.py` (6, 3 `@pytest.mark.neo4j`) | |
 
 **Concept:** resolution is where "the gateway", "api-gw", "edge gateway" all
@@ -96,13 +97,23 @@ is what makes re-ingesting a no-op.
 
 `config.py` also gained `extract_model()` + `GROQ_EXTRACT_MODEL` — extraction is a
 token-heavy batch, so it can run on a different Groq model (hence a separate daily
-token quota) from synthesis. `extract_chunk` now aborts the whole run cleanly on a
-rate-limit (cache keeps progress) and retries on malformed structured output.
+token quota) from synthesis. `extract_model(..., only="google")` pins to one
+provider with no fallback.
 
-**Blocked:** the full 42-chunk extraction exceeded Groq's 200K-tokens/day free
-limit (a day of iterative testing). Finish with `python scripts/ingest_corpus.py`
-once the quota resets, or on Groq Dev tier (~$0.02), or with
-`GROQ_EXTRACT_MODEL=openai/gpt-oss-20b`.
+**Free-tier reality (2026-09-02).** Groq's free tier rejects any single request
+over **8000 tokens/minute** with a `413 "request too large"` — a handful of the
+larger chunks (prompt + JSON schema + output reservation ≈ 9.5k) can never go
+through Groq there. Fix: `extract.py` now tells a `413` apart from real
+throttling (`_is_request_too_large`) and, for that chunk only, switches to
+Google-only for its remaining retries instead of aborting the batch. The 8
+oversized chunks were extracted via Gemini and cached.
+
+A day of iterative debugging then burned **both** free daily quotas (Groq 200K
+tokens; Gemini 20 requests) and, mid-fix, wiped the Gemini cache for 3 of those
+chunks. So: **39/42 chunks are in the graph now** (idempotent, `$0`, ~2 min to
+rebuild from cache); the 3 in `DEFERRED_CHUNKS` get a one-shot
+`backfill_extract.py` top-up once quotas reset. Provisional counts: **43
+entities / 202 relationships** (targets 45–65 / 140–200).
 
 ### 1.5 Extraction eval ⬜
 

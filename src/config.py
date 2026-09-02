@@ -164,6 +164,7 @@ def chat_model(
     *,
     router: bool = False,
     extract: bool = False,
+    only: str | None = None,
 ) -> Runnable:
     """Primary chat model with automatic fallback to the other provider.
 
@@ -172,14 +173,20 @@ def chat_model(
             (``with_structured_output``); ``invoke`` then returns an instance.
         router: Use the router model / token budget.
         extract: Use the ingest-extraction model.
+        only: Pin to a single provider (one of :data:`PROVIDERS`) with no
+            fallback — e.g. when the primary provider structurally cannot serve
+            a request (Groq's free-tier per-request token ceiling).
 
     Returns:
         A runnable. ``.invoke(str | messages)`` returns an ``AIMessage`` (or a
         ``structured`` instance). Falls back provider-to-provider on error.
     """
     configure_llm_cache()
+    if only is not None and only not in PROVIDERS:
+        raise ValueError(f"only={only!r} must be one of {PROVIDERS}")
+    providers = [only] if only is not None else _ordered_providers()
     models: list[Runnable] = []
-    for provider in _ordered_providers():
+    for provider in providers:
         model = build_chat_model(provider, router=router, extract=extract)
         if structured is not None:
             model = _with_structured_output(model, provider, structured)
@@ -207,9 +214,15 @@ def router_model(structured: type[BaseModel] | None = None) -> Runnable:
     return chat_model(structured, router=True)
 
 
-def extract_model(structured: type[BaseModel] | None = None) -> Runnable:
-    """Chat model for ingest extraction (own Groq model → own daily quota)."""
-    return chat_model(structured, extract=True)
+def extract_model(
+    structured: type[BaseModel] | None = None, *, only: str | None = None
+) -> Runnable:
+    """Chat model for ingest extraction (own Groq model → own daily quota).
+
+    ``only="google"`` pins to Gemini with no fallback — used for chunks whose
+    request exceeds Groq's free-tier per-request token ceiling.
+    """
+    return chat_model(structured, extract=True, only=only)
 
 
 @functools.lru_cache

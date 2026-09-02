@@ -62,22 +62,36 @@ also retried; exhausted chunks recorded in `failed`, not raised. Relies on
 Note: Groq free-tier TPM limits make a full 42-chunk run take ~5–20 min with
 back-offs — acceptable for a one-time ingest.
 
-### 1.4 Graph load + resolution — code complete, ingest gate pending
+### 1.4 Graph load + resolution — 39/42 chunks live, gate PROVISIONAL
 `src/ingest/resolve.py` (normalise → alias table → dedupe → deterministic id),
 `src/graph/queries.py` (11 entity + 12 relationship MERGE templates, built from
 the enums), `src/graph/client.py` (`Neo4jGraph` + constraint/index setup),
 `src/ingest/load_graph.py` (node `properties` → JSON string; `HANDLES` → `:Concern`
 node). `scripts/ingest_corpus.py` runs chunk→extract→resolve→load (`--wipe` for a
 clean rebuild; pauses cleanly, exit 2, when both LLM providers are throttled).
-53 unit/integration tests pass. **End-to-end ingest incomplete:** the 42-chunk
-extraction exceeded the Groq free-tier 200K-tokens/day cap on 2026-09-01 (~32
-chunks cached). Resume with `python scripts/ingest_corpus.py` after the quota
-resets. **Gate:**
+`scripts/backfill_extract.py` seeds the cache for oversized chunks via Gemini.
+All unit/integration tests pass.
+
+**Free-tier constraint (2026-09-02):** Groq free tier caps a single request at
+8000 TPM; ~8 of the larger chunks exceed that (prompt + schema + output ≈ 9.5k)
+and must go through Gemini. `extract.py` now distinguishes a `413` from real
+throttling and switches those chunks to Google-only. A day of debugging
+exhausted both free daily quotas and cost the Gemini cache for 3 chunks, so they
+sit in `ingest_corpus.py::DEFERRED_CHUNKS` (`user-service.md#overview`,
+`user-service.md#security`, `data-team.md`).
+
+**To finish:** after quotas reset — `python scripts/backfill_extract.py`, then
+clear `DEFERRED_CHUNKS`, then `python scripts/ingest_corpus.py --wipe`.
+
+**Gate:**
 - Neo4j: **45–65 distinct entities**, **140–200 relationships**.
+  Provisional (39/42): **43 entities, 202 relationships**. Edges are keyed on
+  `source_chunk_id`, so a fact in N chunks = N edges (provenance); distinct
+  `(src,type,tgt)` ≈ 125.
 - Every `ONTOLOGY.md` §3 alias case → one node.
-- Re-running `ingest_corpus.py` changes no counts.
-- Every relationship has `source_chunk_id` + `evidence`.
-- Ingest < 20 min, $0.
+- Re-running `ingest_corpus.py` changes no counts. ✅ (43 / 202 both runs)
+- Every relationship has `source_chunk_id` + `evidence`. ✅ (0 missing)
+- Ingest < 20 min, $0. ✅ (~2 min, all cache hits)
 
 ### 1.5 Extraction eval
 Hand-label the ~25 benchmark-critical relationships (from

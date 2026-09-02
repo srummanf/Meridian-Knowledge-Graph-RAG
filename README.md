@@ -15,7 +15,7 @@ vector search, merges the results, and answers with validated citations.
 | 1.1 — Models | ✅ | `src/models/*` — typed vocabulary & pipeline shapes (35 tests) |
 | 1.2 — Chunking | ✅ | `src/ingest/chunk.py` — 37 docs → 42 chunks (15 tests) |
 | 1.3 — Extraction | ✅ | `src/ingest/extract.py` + `src/utils/errors.py` — LLM → validated `ExtractionResult` (24 tests) |
-| 1.4 — Graph load + resolution | 🚧 | code + tests done (53 tests); end-to-end ingest paused on Groq daily-token limit |
+| 1.4 — Graph load + resolution | 🚧 | 39/42 chunks in Neo4j (43 entities, 202 rels), idempotent & $0 to rebuild; 3 oversized chunks deferred to a quota-reset top-up |
 | 1.5 — Extraction eval | ⬜ | F1 ≥ 0.85 / 0.75 |
 | 2 — Vector index | ⬜ | pgvector populated |
 | 3 — Routing & retrieval | ⬜ | LangGraph pipeline |

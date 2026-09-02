@@ -171,10 +171,28 @@ _MALFORMED_MARKERS = (
     "did not parse",
     "invalid json",
 )
+# Groq's free tier rejects any single request over its per-minute token limit
+# with a 413 whose body still says ``"code": "rate_limit_exceeded"`` — but no
+# amount of waiting fixes it, so it must be told apart from real throttling.
+_TOO_LARGE_MARKERS = ("request too large", "reduce your message size")
+
+
+def _is_request_too_large(exc: Exception) -> bool:
+    """True if a single request exceeds the provider's per-request size ceiling.
+
+    Permanent for that request (unlike a 429): the caller must shrink it or use
+    a provider with a bigger ceiling, not retry.
+    """
+    if getattr(exc, "status_code", None) == 413:
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in _TOO_LARGE_MARKERS)
 
 
 def _is_rate_limited(exc: Exception) -> bool:
     """True if ``exc`` looks like a provider throttling us (either provider)."""
+    if _is_request_too_large(exc):
+        return False
     if getattr(exc, "status_code", None) == 429:
         return True
     text = str(exc).lower()
@@ -194,18 +212,36 @@ def extract_chunk(
     model: Runnable | None = None,
     max_retries: int = MAX_RETRIES,
 ) -> ExtractionResult:
-    """Extract one chunk, retrying on validation failure. Raises on exhaustion."""
+    """Extract one chunk, retrying on validation failure. Raises on exhaustion.
+
+    If the primary model rejects the request as too large (Groq's free-tier
+    per-request token ceiling), the chunk is re-run against a Google-only model
+    for the rest of its retry budget. The switch does not consume an attempt.
+    """
     llm = model if model is not None else extract_model(ExtractionResult)
+    switched = False
     messages: list = [
         SystemMessage(content=_system_prompt()),
         HumanMessage(content=_format_chunk(chunk)),
     ]
 
     errors: list[str] = []
-    for attempt in range(1, max_retries + 1):
+    attempt = 0
+    while attempt < max_retries:
+        attempt += 1
         try:
             result: ExtractionResult = llm.invoke(messages)
         except Exception as exc:  # noqa: BLE001 - classify: rate-limit aborts, bad-JSON retries
+            if _is_request_too_large(exc) and not switched and model is None:
+                log.warning(
+                    "%s: request too large for the primary provider; "
+                    "retrying this chunk on Google only",
+                    chunk.chunk_id,
+                )
+                llm = extract_model(ExtractionResult, only="google")
+                switched = True
+                attempt -= 1  # the switch is not a spent attempt
+                continue
             if _is_rate_limited(exc):
                 raise
             if not _is_malformed_output(exc):
@@ -253,16 +289,33 @@ class FailedChunk(NamedTuple):
 
 
 def extract_corpus(
-    chunks: list[Chunk], *, model: Runnable | None = None
+    chunks: list[Chunk],
+    *,
+    model: Runnable | None = None,
+    skip: set[str] | None = None,
 ) -> tuple[list[ExtractionResult], list[FailedChunk]]:
-    """Extract every chunk. Failures are collected, not raised (rules.md §4.2)."""
-    llm = model if model is not None else extract_model(ExtractionResult)
+    """Extract every chunk. Failures are collected, not raised (rules.md §4.2).
+
+    ``model`` is passed straight through to :func:`extract_chunk` (``None`` lets
+    each chunk build the default model, so an oversized chunk can switch to
+    Google on its own).
+
+    ``skip`` is a set of ``chunk_id`` values to leave out entirely — used to
+    park chunks that cannot be extracted yet (e.g. both free-tier providers are
+    out of quota) without aborting the run. Skipped chunks are recorded in
+    ``failed`` with a ``deferred`` marker.
+    """
+    skip = skip or set()
     results: list[ExtractionResult] = []
     failed: list[FailedChunk] = []
 
     for done, chunk in enumerate(chunks):
+        if chunk.chunk_id in skip:
+            log.warning("deferring %s (in skip set)", chunk.chunk_id)
+            failed.append(FailedChunk(chunk.chunk_id, ["deferred: in skip set"]))
+            continue
         try:
-            results.append(extract_chunk(chunk, model=llm))
+            results.append(extract_chunk(chunk, model=model))
         except ExtractionError as exc:
             log.error("giving up on %s: %s", exc.chunk_id, "; ".join(exc.errors))
             failed.append(FailedChunk(exc.chunk_id, exc.errors))

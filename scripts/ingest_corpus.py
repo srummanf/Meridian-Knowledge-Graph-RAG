@@ -32,6 +32,16 @@ log = get_logger("ingest")
 ENTITY_TARGET = range(45, 66)          # ONTOLOGY §6
 RELATIONSHIP_TARGET = range(140, 201)
 
+# Chunks parked for a later top-up run. These three exceed Groq's free-tier
+# per-request token ceiling AND lost their Gemini cache during 2026-09-02
+# debugging, when both free-tier daily quotas were exhausted. Clear this set and
+# re-run `scripts/backfill_extract.py` once the quotas reset, then `--wipe`.
+DEFERRED_CHUNKS = {
+    "services/user-service.md#overview",
+    "services/user-service.md#security",
+    "teams/data-team.md",
+}
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -44,14 +54,20 @@ def main(argv: list[str] | None = None) -> int:
     log.info("chunked corpus: %d chunks", len(chunks))
 
     try:
-        results, failed = extract_corpus(chunks)
+        results, failed = extract_corpus(chunks, skip=DEFERRED_CHUNKS)
     except LLMUnavailableError as exc:
         print(f"\n=== ingest paused ===\n{exc}\n")
         print("The LLM cache kept every chunk done so far. Re-run this script when "
               "the provider quota resets (Groq free tier: 200K tokens/day).")
         return 2
-    if failed:
-        log.warning("%d chunk(s) failed extraction: %s", len(failed), [f.chunk_id for f in failed])
+    deferred = [f for f in failed if f.errors == ["deferred: in skip set"]]
+    real_failures = [f for f in failed if f not in deferred]
+    if real_failures:
+        log.warning(
+            "%d chunk(s) failed extraction: %s",
+            len(real_failures),
+            [f.chunk_id for f in real_failures],
+        )
 
     entities, relationships = resolve(results)
     log.info("resolved: %d entities, %d relationships", len(entities), len(relationships))
@@ -62,7 +78,12 @@ def main(argv: list[str] | None = None) -> int:
     elapsed = time.perf_counter() - started
 
     print("\n=== ingest summary ===")
-    print(f"chunks: {len(chunks)}   extracted ok: {len(results)}   failed: {len(failed)}")
+    print(
+        f"chunks: {len(chunks)}   extracted ok: {len(results)}   "
+        f"deferred: {len(deferred)}   failed: {len(real_failures)}"
+    )
+    if deferred:
+        print(f"deferred chunks (top up later): {[f.chunk_id for f in deferred]}")
     print(f"entities: {counts['entities']}   relationships: {counts['relationships']}")
     print(f"edges missing evidence/source: {counts['relationships_missing_evidence']}")
     print(f"edges skipped (bad endpoint): {counts['skipped']}")
@@ -79,8 +100,15 @@ def main(argv: list[str] | None = None) -> int:
         counts["entities"] in ENTITY_TARGET
         and counts["relationships"] in RELATIONSHIP_TARGET
         and counts["relationships_missing_evidence"] == 0
-        and not failed
+        and not real_failures
+        and not deferred
     )
+    if deferred and not real_failures:
+        print(
+            f"\nPhase 1.4 gate: PROVISIONAL "
+            f"({len(results)}/{len(chunks)} chunks; {len(deferred)} deferred)"
+        )
+        return 1
     print(f"\nPhase 1.4 gate: {'PASS' if ok else 'CHECK'}")
     return 0 if ok else 1
 
