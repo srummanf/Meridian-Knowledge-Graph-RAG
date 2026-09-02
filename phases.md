@@ -196,15 +196,20 @@ representative). `tests/test_api.py` (9).
 
 ## Phase 5 — Benchmark & writeup (4–5 days)
 
-### 5.1 Baseline + harness
-`src/baselines/vector_only.py` — same pipeline, `route` forced to VECTOR, graph
-nodes skipped. `scripts/benchmark.py` reads `data/benchmark/questions.md`
-(convert to `tests/fixtures/benchmark_questions.json`), runs both systems,
-records per question: answer, latency, tokens, cited sources.
+### 5.1 Baseline + harness ✅ (built; run in progress)
+`src/baselines/vector_only.py` — `answer_vector_only()` = `compile_answer_pipeline`
+with the router pinned to `VECTOR`, so the graph node never runs (everything else
+held constant). `scripts/benchmark.py` parses `data/benchmark/questions.md` →
+`tests/fixtures/benchmark_questions.json` (30 Qs, category/route/gold/sources),
+runs each through both systems, and writes `tests/fixtures/benchmark_run.json`
+(**incrementally + resumable** — free-tier quota will not finish it in one pass)
++ a grading skeleton to `BENCHMARK_RESULTS.md` (answer, route, latency, est.
+tokens, citations, notes per system). `tests/test_benchmark.py` (parser + scorer).
 
 ### 5.2 Grade + analyse
-Manual grading, rubric in `data/benchmark/questions.md` (0 / .25 / .5 / .75 / 1).
-Accuracy by category (1-hop, 2-hop, 3-hop, aggregation, refusal). **Gate:**
+Manual grading in `BENCHMARK_RESULTS.md` (fill `G`/`V` columns, rubric
+0 / .25 / .5 / .75 / 1). `scripts/score_benchmark.py` reads them back, reports
+mean accuracy per category, checks the gate. **Gate:**
 - 1-hop: Graph within ±5% of vector.
 - 2-hop: Graph ≥ +15%.
 - 3-hop / multi-constraint: Graph ≥ +30%.

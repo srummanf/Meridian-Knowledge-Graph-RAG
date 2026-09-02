@@ -291,7 +291,29 @@ tier (rate-limit back-off) with one Gemini fallback; `API_METRICS.md` is
 regenerated warm (all LLM calls cache hits) so the number reflects Cypher +
 local embedding + merge/validate overhead, not API round-trips.
 
-## Phase 5 — Benchmark & writeup ⬜
+## Phase 5 — Benchmark & writeup
 
-`src/baselines/vector_only.py`, `scripts/benchmark.py`, `BENCHMARK_RESULTS.md`,
-`FINDINGS.md`, `SETUP.md`.
+### 5.1 Baseline + harness ✅ (harness built; benchmark run in progress)
+
+Goal: measure what the knowledge graph adds, category by category, against an
+otherwise-identical vector-only system.
+
+| File | What it does |
+|------|--------------|
+| `src/baselines/vector_only.py` | `answer_vector_only(q)` — `compile_answer_pipeline(router=_force_vector)`: the router is pinned to a `VECTOR` `RoutingDecision`, so every question goes `retrieve_vector → merge → synthesize → validate` and the graph node never runs. Same chunks, same embeddings, same synthesis prompt, same citation validator — the graph is the only variable. |
+| `scripts/benchmark.py` | Parses `data/benchmark/questions.md` (regex over `**Bnn.**` blocks + `## Category n` headers) into `tests/fixtures/benchmark_questions.json` (id, question, category ∈ {1-hop, 2-hop, 3-hop, aggregation, refusal}, gold route/answer/sources). Runs each question through `answer_question` (graph) and `answer_vector_only` (baseline), recording route used, answer, cited chunk ids, notes, latency, and a chars/4 token estimate. Writes `tests/fixtures/benchmark_run.json` **after every system call** so a quota-kill mid-run resumes cleanly (`--only graph|vector`, `--parse-only`). Emits `BENCHMARK_RESULTS.md` — a grading skeleton with a blank `G`/`V` column per row plus per-question detail. |
+| `scripts/score_benchmark.py` | Reads the filled `G`/`V` scores back from `BENCHMARK_RESULTS.md`, computes mean accuracy per category per system, checks the 5.2 gate (1-hop parity ±0.05; 2-hop Δ ≥ +0.15; 3-hop Δ ≥ +0.30; aggregation graph ≥ 0.80 & vector ≤ 0.20). |
+| `tests/test_benchmark.py` (7) | Parser (30 Qs, category/route/source extraction, gold-answer flattening) + scorer (score parsing, category means, gate checks) — all offline. |
+
+**Concept:** the benchmark isolates one variable. Both systems share everything
+except routing, so a category-level accuracy gap is attributable to graph
+traversal, not to a better prompt or better chunks.
+
+**Free-tier note:** 30 questions × 2 systems × (route + plan + synth + maybe a
+validator regen) does not fit one day's Groq quota — hence the incremental,
+resumable run file.
+
+### 5.2 Grade + analyse ⬜  ·  ### 5.3 Writeup ⬜
+
+`BENCHMARK_RESULTS.md` (manual scoring), `FINDINGS.md`, `SETUP.md` ✅, README
+benchmark table.

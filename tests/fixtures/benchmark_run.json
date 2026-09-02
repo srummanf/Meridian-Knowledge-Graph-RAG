@@ -1,0 +1,341 @@
+{
+  "B01": {
+    "question": "What is the Auth Service?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "The Auth Service is a Service (aliases: authn\u2011svc, Authentication Service, the auth svc) owned by the Platform Team, version\u202f5.4. It is Meridian\u2019s identity provider that registers users, verifies credentials, and issues JWT access tokens via the OAuth2 authorization\u2011code flow. It implements OAuth2 and is itself the OAuth2 provider for Meridian.",
+      "citations": [
+        "services/auth-service.md",
+        "services/auth-service.md",
+        "services/auth-service.md"
+      ],
+      "notes": [],
+      "latency_ms": 35447.1,
+      "est_tokens": 1014
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "The Auth Service is a Service (aliases: authn\u2011svc, Authentication Service, the auth svc) owned by the Platform Team, version\u202f5.4. It is Meridian\u2019s identity provider that registers users, verifies credentials, and issues JWT access tokens via the OAuth2 authorization\u2011code flow. It implements OAuth2 and is itself the OAuth2 provider for Meridian.",
+      "citations": [
+        "services/auth-service.md",
+        "services/auth-service.md",
+        "services/auth-service.md"
+      ],
+      "notes": [],
+      "latency_ms": 2802.2,
+      "est_tokens": 1014
+    }
+  },
+  "B02": {
+    "question": "What is Kafka used for at Meridian?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "Kafka is Meridian\u2019s event streaming platform; the Ledger Service publishes transaction events to Kafka and the Notification and Fraud services consume those transaction events.",
+      "citations": [
+        "databases/kafka.md"
+      ],
+      "notes": [],
+      "latency_ms": 7657.0,
+      "est_tokens": 1017
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "Kafka is Meridian\u2019s event streaming platform; the Ledger Service publishes transaction events to Kafka and the Notification and Fraud services consume those transaction events.",
+      "citations": [
+        "databases/kafka.md"
+      ],
+      "notes": [],
+      "latency_ms": 2575.3,
+      "est_tokens": 1017
+    }
+  },
+  "B03": {
+    "question": "Which language is the Ledger Service written in?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "The Ledger Service is written in Java.",
+      "citations": [
+        "libraries/java.md"
+      ],
+      "notes": [],
+      "latency_ms": 20820.1,
+      "est_tokens": 739
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "The Ledger Service is written in Java.",
+      "citations": [
+        "libraries/java.md"
+      ],
+      "notes": [],
+      "latency_ms": 2684.6,
+      "est_tokens": 739
+    }
+  },
+  "B04": {
+    "question": "What does CVE-2021-44228 (Log4Shell) do?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "CVE-2021-44228 (Log4Shell) is a critical remote\u2011code\u2011execution vulnerability in Apache Log4j that allows a crafted string in logged input to cause Log4j to load and execute remote code via JNDI.",
+      "citations": [
+        "vulnerabilities/cve-2021-44228-log4shell.md"
+      ],
+      "notes": [],
+      "latency_ms": 12287.5,
+      "est_tokens": 1200
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "CVE-2021-44228 (Log4Shell) is a critical remote\u2011code\u2011execution vulnerability in Apache Log4j that allows a crafted string in logged input to cause Log4j to load and execute remote code via JNDI.",
+      "citations": [
+        "vulnerabilities/cve-2021-44228-log4shell.md"
+      ],
+      "notes": [],
+      "latency_ms": 2457.2,
+      "est_tokens": 1200
+    }
+  },
+  "B05": {
+    "question": "What is mTLS and where is it used at Meridian?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "mTLS is mutual TLS where both sides of a connection present a certificate. Meridian uses it so that only known services can call internal gRPC APIs. It secures the Auth API, the Ledger API, and the User API for internal traffic, and every internal gRPC endpoint is secured by mTLS.",
+      "citations": [
+        "security/mtls.md",
+        "security/mtls.md",
+        "security/mtls.md",
+        "security/mtls.md",
+        "security/mtls.md",
+        "protocols/grpc.md"
+      ],
+      "notes": [],
+      "latency_ms": 8146.2,
+      "est_tokens": 751
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "mTLS is mutual TLS where both sides of a connection present a certificate. Meridian uses it so that only known services can call internal gRPC APIs. It secures the Auth API, the Ledger API, and the User API for internal traffic, and every internal gRPC endpoint is secured by mTLS.",
+      "citations": [
+        "security/mtls.md",
+        "security/mtls.md",
+        "security/mtls.md",
+        "security/mtls.md",
+        "security/mtls.md",
+        "protocols/grpc.md"
+      ],
+      "notes": [],
+      "latency_ms": 2806.2,
+      "est_tokens": 751
+    }
+  },
+  "B06": {
+    "question": "What database does the Fraud Service use as a feature store?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "Elasticsearch",
+      "citations": [
+        "services/fraud-service.md"
+      ],
+      "notes": [],
+      "latency_ms": 15780.1,
+      "est_tokens": 1243
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "Elasticsearch",
+      "citations": [
+        "services/fraud-service.md"
+      ],
+      "notes": [],
+      "latency_ms": 2678.5,
+      "est_tokens": 1243
+    }
+  },
+  "B07": {
+    "question": "Which team owns the Merchant Dashboard?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "Growth Team",
+      "citations": [
+        "products/merchant-dashboard.md"
+      ],
+      "notes": [],
+      "latency_ms": 40794.2,
+      "est_tokens": 1111
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "Growth Team",
+      "citations": [
+        "products/merchant-dashboard.md"
+      ],
+      "notes": [],
+      "latency_ms": 2762.5,
+      "est_tokens": 1111
+    }
+  },
+  "B08": {
+    "question": "What protocol does the Public REST API use?",
+    "category": "1-hop",
+    "graph": {
+      "route_used": "VECTOR",
+      "answer": "The Public REST API uses the REST protocol.",
+      "citations": [
+        "services/api-gateway.md#overview"
+      ],
+      "notes": [],
+      "latency_ms": 12925.2,
+      "est_tokens": 747
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "The Public REST API uses the REST protocol.",
+      "citations": [
+        "services/api-gateway.md#overview"
+      ],
+      "notes": [],
+      "latency_ms": 2771.9,
+      "est_tokens": 747
+    }
+  },
+  "B09": {
+    "question": "Which services use PostgreSQL?",
+    "category": "2-hop",
+    "graph": {
+      "route_used": "GRAPH",
+      "answer": "Auth Service, Billing Service, Ledger Service, Reporting Service, and User Service use PostgreSQL.",
+      "citations": [
+        "vulnerabilities/cve-2024-0985-postgresql.md",
+        "vulnerabilities/cve-2024-0985-postgresql.md",
+        "vulnerabilities/cve-2024-0985-postgresql.md",
+        "vulnerabilities/cve-2024-0985-postgresql.md",
+        "vulnerabilities/cve-2024-0985-postgresql.md"
+      ],
+      "notes": [],
+      "latency_ms": 8725.9,
+      "est_tokens": 134
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "Auth Service, User Service, Billing Service, Ledger Service, and Reporting Service use PostgreSQL.",
+      "citations": [
+        "databases/postgresql.md",
+        "vulnerabilities/cve-2024-0985-postgresql.md"
+      ],
+      "notes": [],
+      "latency_ms": 4333.8,
+      "est_tokens": 1078
+    }
+  },
+  "B10": {
+    "question": "Which services depend on FastAPI?",
+    "category": "2-hop",
+    "graph": {
+      "route_used": "GRAPH",
+      "answer": "API Gateway, Fraud Service, Notification Service, Reporting Service, and User Service depend on FastAPI.",
+      "citations": [
+        "services/api-gateway.md#overview",
+        "services/fraud-service.md",
+        "services/notification-service.md",
+        "services/reporting-service.md#overview",
+        "services/user-service.md#overview"
+      ],
+      "notes": [],
+      "latency_ms": 8759.6,
+      "est_tokens": 127
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "API Gateway, User Service, Notification Service, Fraud Service, and Reporting Service depend on FastAPI.",
+      "citations": [
+        "libraries/fastapi.md",
+        "services/user-service.md#overview",
+        "libraries/fastapi.md",
+        "libraries/fastapi.md",
+        "libraries/fastapi.md"
+      ],
+      "notes": [],
+      "latency_ms": 10856.7,
+      "est_tokens": 1181
+    }
+  },
+  "B17": {
+    "question": "If Log4Shell is exploited, which Meridian products are affected?",
+    "category": "3-hop",
+    "graph": {
+      "route_used": "GRAPH",
+      "answer": "Ledger Service and Payments Platform are affected.",
+      "citations": [
+        "libraries/log4j.md",
+        "libraries/log4j.md"
+      ],
+      "notes": [],
+      "latency_ms": 8669.9,
+      "est_tokens": 115
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "The Ledger Service and, by extension, the Payments Platform are affected if Log4Shell is exploited.",
+      "citations": [
+        "vulnerabilities/cve-2021-44228-log4shell.md",
+        "libraries/log4j.md"
+      ],
+      "notes": [],
+      "latency_ms": 30709.9,
+      "est_tokens": 980
+    }
+  },
+  "B24": {
+    "question": "How many services use PostgreSQL?",
+    "category": "aggregation",
+    "graph": {
+      "route_used": "GRAPH",
+      "answer": "5 services use PostgreSQL.",
+      "citations": [
+        "vulnerabilities/cve-2024-0985-postgresql.md"
+      ],
+      "notes": [],
+      "latency_ms": 7772.8,
+      "est_tokens": 136
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "5 services use PostgreSQL.",
+      "citations": [
+        "databases/postgresql.md"
+      ],
+      "notes": [],
+      "latency_ms": 3999.4,
+      "est_tokens": 1061
+    }
+  },
+  "B28": {
+    "question": "Is PostgreSQL better than MySQL for Meridian?",
+    "category": "refusal",
+    "graph": {
+      "route_used": "REFUSE",
+      "answer": "(refused)",
+      "citations": [],
+      "notes": [
+        "refused: nothing retrieved for the question"
+      ],
+      "latency_ms": 2948.8,
+      "est_tokens": 11
+    },
+    "vector": {
+      "route_used": "VECTOR",
+      "answer": "The retrieved context does not contain enough information to answer this question.",
+      "citations": [],
+      "notes": [],
+      "latency_ms": 3734.6,
+      "est_tokens": 1010
+    }
+  }
+}
