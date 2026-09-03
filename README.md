@@ -245,6 +245,70 @@ pytest -m "not llm and not neo4j and not pgvector"   # 237 offline tests, ~20 s
 
 ---
 
+## Inspecting the databases in a UI
+
+With `docker compose up -d` running and the indexes built (`docker compose ps`
+shows both healthy), you can browse both stores visually.
+
+### Neo4j — nothing to install
+
+The `neo4j:5-community` image bundles the **Neo4j Browser** web UI.
+
+1. Open <http://localhost:7474>.
+2. Connect URL `bolt://localhost:7687`, auth *Username / Password*, user `neo4j`,
+   password `meridian-dev`.
+3. Run queries (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>):
+
+   ```cypher
+   MATCH (n) RETURN n LIMIT 100                      // ~48 nodes
+   MATCH ()-[r]->() RETURN type(r), count(*)         // ~222 relationships
+   CALL db.schema.visualization()                    // the ontology
+   ```
+
+### Postgres + pgvector — one SQL client
+
+Install **DBeaver Community** (free, cross-platform):
+
+```bash
+winget install --id DBeaver.DBeaver.Community -e     # Windows  → %LOCALAPPDATA%\DBeaver\dbeaver.exe
+brew install --cask dbeaver-community                # macOS
+# Linux / manual: https://dbeaver.io/download/
+```
+
+**Database ▸ New Database Connection ▸ PostgreSQL**, then:
+
+| Field | Value |
+|-------|-------|
+| Host | `localhost` |
+| Port | **5433** (not 5432) |
+| Database | `meridian` |
+| Username | `meridian` |
+| Password | `meridian-dev` |
+
+**Test Connection** → accept the JDBC driver download → **Finish**. The data
+sits under **meridian ▸ Schemas ▸ public ▸ Tables**:
+
+| Table | Rows | Holds |
+|-------|------|-------|
+| `langchain_pg_collection` | 1 | collection metadata |
+| `langchain_pg_embedding` | ~42 | one row per chunk: `document` text, `cmetadata` JSON (`chunk_id`, `source`), `embedding` `vector(384)` |
+
+pgAdmin 4, Beekeeper Studio, and TablePlus work with the same credentials.
+
+### Stopping the stack
+
+```bash
+docker compose stop     # pause, keep data
+docker compose down      # remove containers, keep volumes
+docker compose down -v   # full reset — deletes the data too
+```
+
+Full walkthrough (step-by-step DBeaver setup, example SQL/Cypher, shell
+one-liners) in
+[`docs/SETUP.md`](./docs/SETUP.md#inspecting-the-data-in-a-ui).
+
+---
+
 ## API reference
 
 ### `POST /query`
